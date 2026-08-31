@@ -12,7 +12,7 @@ import { DashboardPlugin } from '@vendure/dashboard/plugin';
 import { GraphiqlPlugin } from '@vendure/graphiql-plugin';
 import 'dotenv/config';
 import path from 'path';
-
+import { CloudinaryAssetStorageStrategy } from './cloudinary/cloudinary-asset-storage.strategy';
 const IS_DEV = process.env.APP_ENV === 'dev';
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
 // must take precedence over any value baked into the .env file at scaffold time.
@@ -43,13 +43,12 @@ export const config: VendureConfig = {
         },
     },
     dbConnectionOptions: {
-        type: 'better-sqlite3',
-        // See the README.md "Migrations" section for an explanation of
-        // the `synchronize` and `migrations` options.
+        type: 'postgres',
+        url: process.env.DATABASE_URL,
         synchronize: false,
         migrations: [path.join(__dirname, './migrations/*.+(js|ts)')],
         logging: false,
-        database: path.join(__dirname, '../vendure.sqlite'),
+        ssl: true,
     },
     paymentOptions: {
         paymentMethodHandlers: [dummyPaymentHandler],
@@ -74,11 +73,14 @@ export const config: VendureConfig = {
         GraphiqlPlugin.init(),
         AssetServerPlugin.init({
             route: 'assets',
-            assetUploadDir: path.join(__dirname, '../static/assets'),
-            // For local dev, the correct value for assetUrlPrefix should
-            // be guessed correctly, but for production it will usually need
-            // to be set manually to match your production url.
-            assetUrlPrefix: IS_DEV ? undefined : 'https://www.my-shop.com/assets/',
+
+            assetUploadDir: path.join(
+                __dirname,
+                '../static/assets',
+            ),
+
+            storageStrategyFactory: () =>
+                new CloudinaryAssetStorageStrategy(),
         }),
         DefaultSchedulerPlugin.init(),
         DefaultJobQueuePlugin.init({ useDatabaseForBuffer: true }),
