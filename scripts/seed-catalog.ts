@@ -420,7 +420,6 @@ const products: SeedProduct[] = [
 ];
 
 async function seedCatalog() {
-
     const worker = await bootstrapWorker(config);
 
     const app = worker.app;
@@ -451,7 +450,9 @@ async function seedCatalog() {
     // ---------------------------------------
 
     const superadminIdentifier =
-        config.authOptions?.superadminCredentials?.identifier;
+        config.authOptions
+            ?.superadminCredentials
+            ?.identifier;
 
     if (!superadminIdentifier) {
         throw new Error(
@@ -484,7 +485,8 @@ async function seedCatalog() {
         await requestContextService.create({
             apiType: 'admin',
             user: superAdminUser,
-            languageCode: LanguageCode.en,
+            languageCode:
+                LanguageCode.en,
         });
 
     // ---------------------------------------
@@ -511,6 +513,12 @@ async function seedCatalog() {
                 facet.code === 'brand',
         );
 
+    const petTypeFacet =
+        facets.items.find(
+            facet =>
+                facet.code === 'pet-type',
+        );
+
     if (!categoryFacet) {
         throw new Error(
             'Facet "category" not found',
@@ -522,6 +530,27 @@ async function seedCatalog() {
             'Facet "brand" not found',
         );
     }
+
+    if (!petTypeFacet) {
+        throw new Error(
+            'Facet "pet-type" not found',
+        );
+    }
+
+    console.log('\nFacets found ✅');
+    console.log(
+        `Category facet: ${categoryFacet.id}`,
+    );
+    console.log(
+        `Brand facet: ${brandFacet.id}`,
+    );
+    console.log(
+        `Pet Type facet: ${petTypeFacet.id}`,
+    );
+
+    // ---------------------------------------
+    // Load facet values
+    // ---------------------------------------
 
     const categoryValues =
         await facetValueService.findByFacetId(
@@ -535,35 +564,43 @@ async function seedCatalog() {
             brandFacet.id,
         );
 
+    const petTypeValues =
+        await facetValueService.findByFacetId(
+            ctx,
+            petTypeFacet.id,
+        );
+
+    console.log('\nPet Type values:');
+
+    for (const value of petTypeValues) {
+        console.log(
+            `${value.name} -> ${value.code} -> ID ${value.id}`,
+        );
+    }
+
     // ---------------------------------------
-    // Seed products
+    // Process products
     // ---------------------------------------
 
     for (const item of products) {
-
         console.log(
             `\nProcessing: ${item.name}`,
         );
 
-        // Avoid duplicates
-        const existing =
-            await productService.findOneBySlug(
-                ctx,
-                item.slug,
-            );
-
-        if (existing) {
-            console.log(
-                `Skipping existing product: ${item.slug}`,
-            );
-            continue;
-        }
+        // -----------------------------------
+        // Find required facet values
+        // -----------------------------------
 
         const categoryFacetValue =
-        categoryValues.find(
-            value =>
-                value.name === item.category,
-        );
+            categoryValues.find(
+                value =>
+                    value.name
+                        .toLowerCase()
+                        .trim() ===
+                    item.category
+                        .toLowerCase()
+                        .trim(),
+            );
 
         if (!categoryFacetValue) {
             throw new Error(
@@ -572,19 +609,131 @@ async function seedCatalog() {
         }
 
         const brandFacetValue =
-        brandValues.find(
-            value =>
-                value.name === item.brand,
-        );
+            brandValues.find(
+                value =>
+                    value.name
+                        .toLowerCase()
+                        .trim() ===
+                    item.brand
+                        .toLowerCase()
+                        .trim(),
+            );
 
         if (!brandFacetValue) {
+            throw new Error(
+                `Brand facet value not found: ${item.brand}`,
+            );
+        }
+
+        const petTypeFacetValue =
+            petTypeValues.find(
+                value =>
+                    value.code
+                        .toLowerCase()
+                        .trim() ===
+                    item.petType
+                        .toLowerCase()
+                        .trim(),
+            );
+
+        if (!petTypeFacetValue) {
+            throw new Error(
+                `Pet Type facet value not found: ${item.petType}`,
+            );
+        }
+
+        // -----------------------------------
+        // Check existing product
+        // -----------------------------------
+
+        const existing =
+            await productService.findOneBySlug(
+                ctx,
+                item.slug,
+            );
+
+        // ===================================
+        // EXISTING PRODUCT
+        // ===================================
+
+        if (existing) {
+            console.log(
+                `Existing product found: ${item.slug}`,
+            );
+
+            /*
+             * Keep existing facet values.
+             *
+             * This protects any other facet
+             * which may already be assigned
+             * manually.
+             */
+            const existingFacetValues =
+                await productService
+                    .getFacetValuesForProduct(
+                        ctx,
+                        existing.id,
+                    );
+
+            const existingFacetValueIds =
+                existingFacetValues.map(
+                    value => value.id,
+                );
+
+            /*
+             * Add category + brand + pet type
+             * without duplicates.
+             */
+            const facetValueIds =
+                Array.from(
+                    new Set([
+                        ...existingFacetValueIds,
+                        categoryFacetValue.id,
+                        brandFacetValue.id,
+                        petTypeFacetValue.id,
+                    ]),
+                );
+
+            await productService.update(
+                ctx,
+                {
+                    id: existing.id,
+
+                    facetValueIds,
+
+                    customFields: {
+                        petType:
+                            item.petType,
+                    },
+                },
+            );
 
             console.log(
-                `Brand "${item.brand}" not found. Skipping product.`,
+                `Updated: ${item.name}`,
+            );
+
+            console.log(
+                `  Category: ${categoryFacetValue.name}`,
+            );
+
+            console.log(
+                `  Brand: ${brandFacetValue.name}`,
+            );
+
+            console.log(
+                `  Pet Type: ${petTypeFacetValue.name} (${petTypeFacetValue.id})`,
             );
 
             continue;
         }
+
+        // ===================================
+        // NEW PRODUCT
+        // ===================================
+
+        console.log(
+            `Creating new product: ${item.slug}`,
+        );
 
         // -----------------------------------
         // Upload image
@@ -605,25 +754,26 @@ async function seedCatalog() {
         }
 
         const stream =
-            fs.createReadStream(imagePath);
-
-        const assetResult =
-            await assetService.createFromFileStream(
-                stream,
+            fs.createReadStream(
                 imagePath,
-                ctx,
             );
 
-        if (
-            'errorCode' in assetResult
-        ) {
+        const assetResult =
+            await assetService
+                .createFromFileStream(
+                    stream,
+                    imagePath,
+                    ctx,
+                );
+
+        if ('errorCode' in assetResult) {
             throw new Error(
                 `Asset upload failed for ${item.image}: ${assetResult.message}`,
             );
         }
 
         // -----------------------------------
-        // Product
+        // Create product
         // -----------------------------------
 
         const product =
@@ -648,9 +798,16 @@ async function seedCatalog() {
                         },
                     ],
 
+                    /*
+                     * IMPORTANT
+                     *
+                     * All 3 filterable facets
+                     * are assigned here.
+                     */
                     facetValueIds: [
                         categoryFacetValue.id,
                         brandFacetValue.id,
+                        petTypeFacetValue.id,
                     ],
 
                     featuredAssetId:
@@ -668,7 +825,7 @@ async function seedCatalog() {
             );
 
         // -----------------------------------
-        // Variant
+        // Create variant
         // -----------------------------------
 
         await productVariantService.create(
@@ -693,8 +850,12 @@ async function seedCatalog() {
                     sku:
                         item.sku,
 
-                    // Vendure stores money
-                    // in minor units.
+                    /*
+                     * Vendure stores money
+                     * in minor units.
+                     *
+                     * ₹800 -> 80000
+                     */
                     price:
                         item.price * 100,
 
@@ -717,21 +878,57 @@ async function seedCatalog() {
         console.log(
             `Created: ${item.name}`,
         );
+
+        console.log(
+            `  Category: ${categoryFacetValue.name}`,
+        );
+
+        console.log(
+            `  Brand: ${brandFacetValue.name}`,
+        );
+
+        console.log(
+            `  Pet Type: ${petTypeFacetValue.name} (${petTypeFacetValue.id})`,
+        );
     }
 
     console.log(
-        '\nCatalog seeding complete ✅',
+        '\n================================',
+    );
+
+    console.log(
+        'Catalog sync complete ✅',
+    );
+
+    console.log(
+        'Existing products were updated.',
+    );
+
+    console.log(
+        'New products were created.',
+    );
+
+    console.log(
+        'Pet Type facets were assigned.',
+    );
+
+    console.log(
+        '================================\n',
     );
 
     await worker.app.close();
 }
 
 seedCatalog()
-    .then(() => process.exit(0))
+    .then(() => {
+        process.exit(0);
+    })
     .catch(error => {
         console.error(
             '\nCatalog seed failed ❌',
         );
+
         console.error(error);
+
         process.exit(1);
     });
