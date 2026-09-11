@@ -99,3 +99,29 @@ export const deleteCmsSectionMutation = graphql(`
         }
     }
 `);
+
+export const cmsProductsQuery = graphql(`
+    query CmsProducts($options: ProductListOptions) {
+        products(options: $options) {
+            items {
+                id
+                name
+                slug
+                featuredAsset {
+                    id
+                    preview
+                    source
+                }
+                variants {
+                    id
+                    name
+                    sku
+                    priceWithTax
+                    currencyCode
+                    stockLevel
+                }
+            }
+            totalItems
+        }
+    }
+`);

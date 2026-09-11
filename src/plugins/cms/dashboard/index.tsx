@@ -21,6 +21,7 @@ import { useEffect, useState, type DragEvent } from 'react';
 import {
     cmsPageQuery,
     cmsPagesQuery,
+    cmsProductsQuery,
     createCmsPageMutation,
     createCmsSectionMutation,
     deleteCmsPageMutation,
@@ -263,6 +264,21 @@ defineDashboardExtension({
                         }),
                 });
 
+                const {
+                    data: productsData,
+                    isLoading: productsLoading,
+                } = useQuery({
+                    queryKey: ['cms-products'],
+                    queryFn: () =>
+                        api.query(cmsProductsQuery, {
+                            options: {
+                                take: 100,
+                            },
+                        }),
+                });
+
+                const availableProducts = productsData?.products.items ?? [];
+
                 // Do NOT return before useMutation()
 
                 const page = data?.cmsPage;
@@ -285,6 +301,10 @@ defineDashboardExtension({
                 const contactSection = page?.sections.find(
                     section => section.type === 'contact',
                 );
+
+                const productSections = page?.sections.filter(
+                    section => section.type === 'products',
+                ) ?? [];
 
                 const [contactEmail, setContactEmail] = useState('');
                 const [contactPhone, setContactPhone] = useState('');
@@ -387,7 +407,12 @@ defineDashboardExtension({
                             text: { text: '', publishedText: '' },
                             'happy-tails': { videos: [], publishedVideos: [] },
                             'pawsitive-reviews': { reviews: [], publishedReviews: [] },
-                            products: { products: [], publishedProducts: [] },
+                            products: {
+                                title: 'New Arrivals',
+                                products: [],
+                                publishedTitle: '',
+                                publishedProducts: [],
+                            },
                             contact: {
                                 heroImage: '',
                                 logoImage: '',
@@ -756,6 +781,37 @@ defineDashboardExtension({
                             }));
                         }
 
+                        for (const section of productSections) {
+                            const draft =
+                                genericDrafts[section.id] ??
+                                section.data ??
+                                {};
+
+                            const selectedProducts =
+                                draft.products ?? [];
+
+                            if (selectedProducts.length === 0) {
+                                throw new Error(
+                                    `${draft.title || 'Products'} must contain at least one product`,
+                                );
+                            }
+
+                            updates.push(
+                                api.mutate(updateCmsSectionMutation, {
+                                    input: {
+                                        id: section.id,
+                                        data: {
+                                            ...draft,
+                                            publishedTitle:
+                                                draft.title ?? 'New Arrivals',
+                                            publishedProducts:
+                                                selectedProducts,
+                                        },
+                                    },
+                                }),
+                            );
+                        }
+
                         return Promise.all(updates);
                     },
                     onSuccess: async () => {
@@ -957,40 +1013,40 @@ defineDashboardExtension({
                                             {[...page.sections]
                                                 .sort((first, second) => first.position - second.position)
                                                 .map((section, index) => (
-                                                <span
-                                                    key={section.id}
-                                                    draggable
-                                                    onDragStart={event => {
-                                                        event.dataTransfer.effectAllowed = 'move';
-                                                        event.dataTransfer.setData('text/plain', String(index));
-                                                        setDraggedComponentIndex(index);
-                                                    }}
-                                                    onDragOver={event => {
-                                                        event.preventDefault();
-                                                        event.dataTransfer.dropEffect = 'move';
-                                                    }}
-                                                    onDrop={event => {
-                                                        event.preventDefault();
-                                                        dropComponent(index, event);
-                                                    }}
-                                                    onDragEnd={() => setDraggedComponentIndex(null)}
-                                                    className="inline-flex cursor-grab items-center gap-2 rounded-full border px-3 py-1 text-xs active:cursor-grabbing"
-                                                >
-                                                    {index + 1}. {section.type}
-                                                    <button
-                                                        type="button"
-                                                        aria-label={`Delete ${section.type} component`}
-                                                        className="font-bold text-destructive"
-                                                        onClick={() => {
-                                                            if (window.confirm(`Delete ${section.type} component?`)) {
-                                                                deleteComponent.mutate(section.id);
-                                                            }
+                                                    <span
+                                                        key={section.id}
+                                                        draggable
+                                                        onDragStart={event => {
+                                                            event.dataTransfer.effectAllowed = 'move';
+                                                            event.dataTransfer.setData('text/plain', String(index));
+                                                            setDraggedComponentIndex(index);
                                                         }}
+                                                        onDragOver={event => {
+                                                            event.preventDefault();
+                                                            event.dataTransfer.dropEffect = 'move';
+                                                        }}
+                                                        onDrop={event => {
+                                                            event.preventDefault();
+                                                            dropComponent(index, event);
+                                                        }}
+                                                        onDragEnd={() => setDraggedComponentIndex(null)}
+                                                        className="inline-flex cursor-grab items-center gap-2 rounded-full border px-3 py-1 text-xs active:cursor-grabbing"
                                                     >
-                                                        x
-                                                    </button>
-                                                </span>
-                                            ))}
+                                                        {index + 1}. {section.type}
+                                                        <button
+                                                            type="button"
+                                                            aria-label={`Delete ${section.type} component`}
+                                                            className="font-bold text-destructive"
+                                                            onClick={() => {
+                                                                if (window.confirm(`Delete ${section.type} component?`)) {
+                                                                    deleteComponent.mutate(section.id);
+                                                                }
+                                                            }}
+                                                        >
+                                                            x
+                                                        </button>
+                                                    </span>
+                                                ))}
                                         </div>
 
                                         <div className="space-y-4">
@@ -1013,17 +1069,109 @@ defineDashboardExtension({
                                                                 />
                                                             )}
                                                             {section.type === 'products' && (
-                                                                <Input
-                                                                    value={(draft.products ?? []).join(', ')}
-                                                                    placeholder="Product IDs, separated by commas"
-                                                                    onChange={event => setGenericDrafts({
-                                                                        ...genericDrafts,
-                                                                        [section.id]: {
-                                                                            ...draft,
-                                                                            products: event.target.value.split(',').map(value => value.trim()).filter(Boolean),
-                                                                        },
-                                                                    })}
-                                                                />
+                                                                <div className="space-y-4">
+
+                                                                    <div className="space-y-2">
+                                                                        <Label>Section title</Label>
+
+                                                                        <Input
+                                                                            value={draft.title ?? ''}
+                                                                            placeholder="New Arrivals"
+                                                                            onChange={event =>
+                                                                                setGenericDrafts({
+                                                                                    ...genericDrafts,
+                                                                                    [section.id]: {
+                                                                                        ...draft,
+                                                                                        title: event.target.value,
+                                                                                    },
+                                                                                })
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <Label>Select Products</Label>
+
+                                                                        {productsLoading ? (
+                                                                            <p className="text-sm text-muted-foreground">
+                                                                                Loading products...
+                                                                            </p>
+                                                                        ) : (
+                                                                            <div className="grid gap-3 md:grid-cols-2">
+
+                                                                                {availableProducts.map(product => {
+                                                                                    const selected =
+                                                                                        (draft.products ?? []).includes(product.id);
+
+                                                                                    return (
+                                                                                        <label
+                                                                                            key={product.id}
+                                                                                            className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 ${selected ? 'bg-muted' : ''
+                                                                                                }`}
+                                                                                        >
+                                                                                            <input
+                                                                                                type="checkbox"
+                                                                                                checked={selected}
+                                                                                                onChange={() => {
+                                                                                                    const current =
+                                                                                                        draft.products ?? [];
+
+                                                                                                    let products = current;
+
+                                                                                                    if (selected) {
+                                                                                                        products = current.filter(
+                                                                                                            (productId: string) =>
+                                                                                                                productId !== product.id
+                                                                                                        );
+                                                                                                    } else {
+                                                                                                        if (current.length >= 16) {
+                                                                                                            toast.error('Maximum 8 products can be selected');
+                                                                                                            return;
+                                                                                                        }
+
+                                                                                                        products = [...current, product.id];
+                                                                                                    }
+
+                                                                                                    setGenericDrafts({
+                                                                                                        ...genericDrafts,
+                                                                                                        [section.id]: {
+                                                                                                            ...draft,
+                                                                                                            products,
+                                                                                                        },
+                                                                                                    });
+                                                                                                }}
+                                                                                            />
+
+                                                                                            {product.featuredAsset?.preview && (
+                                                                                                <img
+                                                                                                    src={product.featuredAsset.preview}
+                                                                                                    alt={product.name}
+                                                                                                    className="h-14 w-14 rounded-md object-cover"
+                                                                                                />
+                                                                                            )}
+
+                                                                                            <div>
+                                                                                                <p className="font-medium">
+                                                                                                    {product.name}
+                                                                                                </p>
+
+                                                                                                <p className="text-xs text-muted-foreground">
+                                                                                                    ID: {product.id}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </label>
+                                                                                    );
+                                                                                })}
+
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <p className="text-sm font-medium">
+                                                                        {(draft.products ?? []).length} products selected
+                                                                    </p>
+
+                                                                </div>
                                                             )}
                                                             {section.type === 'image' && (
                                                                 <div className="flex items-center gap-3">
@@ -1055,257 +1203,257 @@ defineDashboardExtension({
                                     </div>
 
                                     {heroSection && (
-                                    <div
-                                        onDragOver={allowComponentDrop}
-                                        onDrop={event => dropComponent(getComponentIndex(heroSection.id), event)}
-                                        className="relative border rounded-lg p-4 space-y-4"
-                                        style={{ order: heroSection?.position ?? 1 }}
-                                    >
-                                        {renderComponentHandle(heroSection.id)}
-                                        <div>
-                                            <h3 className="ml-8 font-medium">
-                                                Hero Banner
-                                            </h3>
-
-                                            <p className="text-sm text-muted-foreground">
-                                                Change the main homepage banner images. Select 3 to 5 images for the automatic hero slider, then drag to reorder.
-                                            </p>
-                                        </div>
-
-                                        <p className="text-sm font-medium">
-                                            {heroSection?.data?.images?.length ?? 0} / 5 images selected
-                                        </p>
-
-                                        {(heroSection?.data?.images?.length || heroSection?.data?.bannerPreview) && (
-                                            <div className="grid grid-cols-3 gap-3 max-w-[800px]">
-                                                {(heroSection.data.images ?? [{ preview: heroSection.data.bannerPreview }]).map((image: any, index: number) => (
-                                                    <div
-                                                        key={image.assetId || image.preview}
-                                                        draggable
-                                                        onDragStart={event => {
-                                                            event.dataTransfer.effectAllowed = 'move';
-                                                            event.dataTransfer.setData('text/plain', String(index));
-                                                            setDraggedItem({ type: 'hero', index });
-                                                        }}
-                                                        onDragOver={event => {
-                                                            event.preventDefault();
-                                                            event.dataTransfer.dropEffect = 'move';
-                                                        }}
-                                                        onDragEnter={event => event.preventDefault()}
-                                                        onDrop={event => {
-                                                            event.preventDefault();
-                                                            dropItem('hero', index, event);
-                                                        }}
-                                                        onDragEnd={() => setDraggedItem(null)}
-                                                        className="cursor-grab active:cursor-grabbing"
-                                                    >
-                                                        <img
-                                                            src={image.preview}
-                                                            alt="Hero banner"
-                                                            className="aspect-video w-full rounded-md border object-cover"
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {!heroSection && (
-                                            <p className="text-sm text-muted-foreground">
-                                                No CMS hero banner set yet.
-                                                The frontend will use its
-                                                default image.
-                                            </p>
-                                        )}
-
-                                        <Button
-                                            type="button"
-                                            onClick={() => {
-                                                setAssetPickerMode('hero');
-                                                setAssetPickerOpen(true);
-                                            }}
+                                        <div
+                                            onDragOver={allowComponentDrop}
+                                            onDrop={event => dropComponent(getComponentIndex(heroSection.id), event)}
+                                            className="relative border rounded-lg p-4 space-y-4"
+                                            style={{ order: heroSection?.position ?? 1 }}
                                         >
-                                                {heroSection ? 'Change Banners' : 'Select Banners'}
-                                        </Button>
-                                        
-                                    </div>
-                                    )}
-                                    {happyTailsSection && (
-                                    <div
-                                        onDragOver={allowComponentDrop}
-                                        onDrop={event => dropComponent(getComponentIndex(happyTailsSection.id), event)}
-                                        className="relative border rounded-lg p-6 space-y-5 min-h-[520px]"
-                                        style={{ order: happyTailsSection?.position ?? 1 }}
-                                    >
-                                        {renderComponentHandle(happyTailsSection.id)}
-                                        <div>
-                                            <h3 className="ml-8 font-medium">
-                                                Happy Tails Videos
-                                            </h3>
-                                            <p className="text-sm text-muted-foreground">
-                                                Select 6 to 10 video assets, then drag them into the order they should appear on the homepage.
-                                            </p>
-                                            <p className="text-sm font-medium mt-2">
-                                                {happyTailsSection?.data?.videos?.length ?? 0} / 10 videos selected
-                                            </p>
-                                        </div>
+                                            {renderComponentHandle(heroSection.id)}
+                                            <div>
+                                                <h3 className="ml-8 font-medium">
+                                                    Hero Banner
+                                                </h3>
 
-                                        {happyTailsSection?.data?.videos?.length ? (
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-                                                {happyTailsSection.data.videos.map((video: any, index: number) => (
-                                                    <div
-                                                        key={video.assetId || video.video || video.thumb}
-                                                        draggable
-                                                        onDragStart={event => {
-                                                            event.dataTransfer.effectAllowed = 'move';
-                                                            event.dataTransfer.setData('text/plain', String(index));
-                                                            setDraggedItem({ type: 'video', index });
-                                                        }}
-                                                        onDragOver={event => {
-                                                            event.preventDefault();
-                                                            event.dataTransfer.dropEffect = 'move';
-                                                        }}
-                                                        onDragEnter={event => event.preventDefault()}
-                                                        onDrop={event => {
-                                                            event.preventDefault();
-                                                            dropItem('video', index, event);
-                                                        }}
-                                                        onDragEnd={() => setDraggedItem(null)}
-                                                        className="relative aspect-[3/4] cursor-grab overflow-hidden rounded-md border bg-muted active:cursor-grabbing"
-                                                    >
-                                                        <video
-                                                            src={video.video}
-                                                            poster={video.thumb || undefined}
-                                                            muted
-                                                            autoPlay
-                                                            loop
-                                                            playsInline
-                                                            preload="auto"
-                                                            aria-label={video.title}
-                                                             className="h-full w-full object-cover"
-                                                        />
-                                                        <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs text-white">
-                                                            {video.title}
-                                                        </span>
-                                                    </div>
-                                                ))}
+                                                <p className="text-sm text-muted-foreground">
+                                                    Change the main homepage banner images. Select 3 to 5 images for the automatic hero slider, then drag to reorder.
+                                                </p>
                                             </div>
-                                        ) : (
-                                            <p className="text-sm text-muted-foreground">
-                                                No CMS videos set yet. The frontend will use its default videos.
-                                            </p>
-                                        )}
 
-                                        <div className="flex items-center gap-3">
+                                            <p className="text-sm font-medium">
+                                                {heroSection?.data?.images?.length ?? 0} / 5 images selected
+                                            </p>
+
+                                            {(heroSection?.data?.images?.length || heroSection?.data?.bannerPreview) && (
+                                                <div className="grid grid-cols-3 gap-3 max-w-[800px]">
+                                                    {(heroSection.data.images ?? [{ preview: heroSection.data.bannerPreview }]).map((image: any, index: number) => (
+                                                        <div
+                                                            key={image.assetId || image.preview}
+                                                            draggable
+                                                            onDragStart={event => {
+                                                                event.dataTransfer.effectAllowed = 'move';
+                                                                event.dataTransfer.setData('text/plain', String(index));
+                                                                setDraggedItem({ type: 'hero', index });
+                                                            }}
+                                                            onDragOver={event => {
+                                                                event.preventDefault();
+                                                                event.dataTransfer.dropEffect = 'move';
+                                                            }}
+                                                            onDragEnter={event => event.preventDefault()}
+                                                            onDrop={event => {
+                                                                event.preventDefault();
+                                                                dropItem('hero', index, event);
+                                                            }}
+                                                            onDragEnd={() => setDraggedItem(null)}
+                                                            className="cursor-grab active:cursor-grabbing"
+                                                        >
+                                                            <img
+                                                                src={image.preview}
+                                                                alt="Hero banner"
+                                                                className="aspect-video w-full rounded-md border object-cover"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {!heroSection && (
+                                                <p className="text-sm text-muted-foreground">
+                                                    No CMS hero banner set yet.
+                                                    The frontend will use its
+                                                    default image.
+                                                </p>
+                                            )}
+
                                             <Button
                                                 type="button"
                                                 onClick={() => {
-                                                    setAssetPickerMode('happy-tails');
+                                                    setAssetPickerMode('hero');
                                                     setAssetPickerOpen(true);
                                                 }}
                                             >
-                                                {happyTailsSection ? 'Change Videos' : 'Select Videos'}
+                                                {heroSection ? 'Change Banners' : 'Select Banners'}
                                             </Button>
+
                                         </div>
-                                    </div>
+                                    )}
+                                    {happyTailsSection && (
+                                        <div
+                                            onDragOver={allowComponentDrop}
+                                            onDrop={event => dropComponent(getComponentIndex(happyTailsSection.id), event)}
+                                            className="relative border rounded-lg p-6 space-y-5 min-h-[520px]"
+                                            style={{ order: happyTailsSection?.position ?? 1 }}
+                                        >
+                                            {renderComponentHandle(happyTailsSection.id)}
+                                            <div>
+                                                <h3 className="ml-8 font-medium">
+                                                    Happy Tails Videos
+                                                </h3>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Select 6 to 10 video assets, then drag them into the order they should appear on the homepage.
+                                                </p>
+                                                <p className="text-sm font-medium mt-2">
+                                                    {happyTailsSection?.data?.videos?.length ?? 0} / 10 videos selected
+                                                </p>
+                                            </div>
+
+                                            {happyTailsSection?.data?.videos?.length ? (
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+                                                    {happyTailsSection.data.videos.map((video: any, index: number) => (
+                                                        <div
+                                                            key={video.assetId || video.video || video.thumb}
+                                                            draggable
+                                                            onDragStart={event => {
+                                                                event.dataTransfer.effectAllowed = 'move';
+                                                                event.dataTransfer.setData('text/plain', String(index));
+                                                                setDraggedItem({ type: 'video', index });
+                                                            }}
+                                                            onDragOver={event => {
+                                                                event.preventDefault();
+                                                                event.dataTransfer.dropEffect = 'move';
+                                                            }}
+                                                            onDragEnter={event => event.preventDefault()}
+                                                            onDrop={event => {
+                                                                event.preventDefault();
+                                                                dropItem('video', index, event);
+                                                            }}
+                                                            onDragEnd={() => setDraggedItem(null)}
+                                                            className="relative aspect-[3/4] cursor-grab overflow-hidden rounded-md border bg-muted active:cursor-grabbing"
+                                                        >
+                                                            <video
+                                                                src={video.video}
+                                                                poster={video.thumb || undefined}
+                                                                muted
+                                                                autoPlay
+                                                                loop
+                                                                playsInline
+                                                                preload="auto"
+                                                                aria-label={video.title}
+                                                                className="h-full w-full object-cover"
+                                                            />
+                                                            <span className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs text-white">
+                                                                {video.title}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">
+                                                    No CMS videos set yet. The frontend will use its default videos.
+                                                </p>
+                                            )}
+
+                                            <div className="flex items-center gap-3">
+                                                <Button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAssetPickerMode('happy-tails');
+                                                        setAssetPickerOpen(true);
+                                                    }}
+                                                >
+                                                    {happyTailsSection ? 'Change Videos' : 'Select Videos'}
+                                                </Button>
+                                            </div>
+                                        </div>
                                     )}
 
                                     {reviewsSection && (
-                                    <div
-                                        onDragOver={allowComponentDrop}
-                                        onDrop={event => dropComponent(getComponentIndex(reviewsSection.id), event)}
-                                        className="relative border rounded-lg p-6 space-y-5"
-                                        style={{ order: reviewsSection?.position ?? 1 }}
-                                    >
-                                        {renderComponentHandle(reviewsSection.id)}
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div>
-                                                <h3 className="ml-8 font-medium">
-                                                    Pawsitive Reviews
-                                                </h3>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Manage reviewer names, review text, ratings, and drag to reorder.
-                                                </p>
+                                        <div
+                                            onDragOver={allowComponentDrop}
+                                            onDrop={event => dropComponent(getComponentIndex(reviewsSection.id), event)}
+                                            className="relative border rounded-lg p-6 space-y-5"
+                                            style={{ order: reviewsSection?.position ?? 1 }}
+                                        >
+                                            {renderComponentHandle(reviewsSection.id)}
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div>
+                                                    <h3 className="ml-8 font-medium">
+                                                        Pawsitive Reviews
+                                                    </h3>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Manage reviewer names, review text, ratings, and drag to reorder.
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    onClick={() => setReviewDrafts([...reviewDrafts, { name: '', text: '', rating: 5 }])}
+                                                >
+                                                    Add Review
+                                                </Button>
                                             </div>
+
+                                            <div className="space-y-4">
+                                                {reviewDrafts.map((review, index) => (
+                                                    <div
+                                                        key={index}
+                                                        draggable
+                                                        onDragStart={event => {
+                                                            event.dataTransfer.effectAllowed = 'move';
+                                                            event.dataTransfer.setData('text/plain', String(index));
+                                                            setDraggedItem({ type: 'review', index });
+                                                        }}
+                                                        onDragOver={event => {
+                                                            event.preventDefault();
+                                                            event.dataTransfer.dropEffect = 'move';
+                                                        }}
+                                                        onDragEnter={event => event.preventDefault()}
+                                                        onDrop={event => {
+                                                            event.preventDefault();
+                                                            dropItem('review', index, event);
+                                                        }}
+                                                        onDragEnd={() => setDraggedItem(null)}
+                                                        className="grid cursor-grab gap-3 border rounded-md p-4 active:cursor-grabbing md:grid-cols-[1fr_2fr_140px_auto]"
+                                                    >
+                                                        <Input
+                                                            value={review.name}
+                                                            placeholder="Reviewer name"
+                                                            onChange={event => {
+                                                                const next = [...reviewDrafts];
+                                                                next[index] = { ...next[index], name: event.target.value };
+                                                                setReviewDrafts(next);
+                                                            }}
+                                                        />
+                                                        <Input
+                                                            value={review.text}
+                                                            placeholder="Review"
+                                                            onChange={event => {
+                                                                const next = [...reviewDrafts];
+                                                                next[index] = { ...next[index], text: event.target.value };
+                                                                setReviewDrafts(next);
+                                                            }}
+                                                        />
+                                                        <select
+                                                            value={review.rating}
+                                                            aria-label={`Rating for review ${index + 1}`}
+                                                            className="border rounded-md px-3 py-2 bg-background"
+                                                            onChange={event => {
+                                                                const next = [...reviewDrafts];
+                                                                next[index] = { ...next[index], rating: Number(event.target.value) };
+                                                                setReviewDrafts(next);
+                                                            }}
+                                                        >
+                                                            {Array.from({ length: 11 }, (_, ratingIndex) => ratingIndex / 2).map(rating => (
+                                                                <option key={rating} value={rating}>{rating} stars</option>
+                                                            ))}
+                                                        </select>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={() => setReviewDrafts(reviewDrafts.filter((_, reviewIndex) => reviewIndex !== index))}
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+
                                             <Button
                                                 type="button"
-                                                onClick={() => setReviewDrafts([...reviewDrafts, { name: '', text: '', rating: 5 }])}
+                                                onClick={() => saveReviews.mutate()}
+                                                disabled={saveReviews.isPending}
                                             >
-                                                Add Review
+                                                {saveReviews.isPending ? 'Saving...' : 'Save Reviews'}
                                             </Button>
                                         </div>
-
-                                        <div className="space-y-4">
-                                            {reviewDrafts.map((review, index) => (
-                                                <div
-                                                    key={index}
-                                                    draggable
-                                                    onDragStart={event => {
-                                                        event.dataTransfer.effectAllowed = 'move';
-                                                        event.dataTransfer.setData('text/plain', String(index));
-                                                        setDraggedItem({ type: 'review', index });
-                                                    }}
-                                                    onDragOver={event => {
-                                                        event.preventDefault();
-                                                        event.dataTransfer.dropEffect = 'move';
-                                                    }}
-                                                    onDragEnter={event => event.preventDefault()}
-                                                    onDrop={event => {
-                                                        event.preventDefault();
-                                                        dropItem('review', index, event);
-                                                    }}
-                                                    onDragEnd={() => setDraggedItem(null)}
-                                                    className="grid cursor-grab gap-3 border rounded-md p-4 active:cursor-grabbing md:grid-cols-[1fr_2fr_140px_auto]"
-                                                >
-                                                    <Input
-                                                        value={review.name}
-                                                        placeholder="Reviewer name"
-                                                        onChange={event => {
-                                                            const next = [...reviewDrafts];
-                                                            next[index] = { ...next[index], name: event.target.value };
-                                                            setReviewDrafts(next);
-                                                        }}
-                                                    />
-                                                    <Input
-                                                        value={review.text}
-                                                        placeholder="Review"
-                                                        onChange={event => {
-                                                            const next = [...reviewDrafts];
-                                                            next[index] = { ...next[index], text: event.target.value };
-                                                            setReviewDrafts(next);
-                                                        }}
-                                                    />
-                                                    <select
-                                                        value={review.rating}
-                                                        aria-label={`Rating for review ${index + 1}`}
-                                                        className="border rounded-md px-3 py-2 bg-background"
-                                                        onChange={event => {
-                                                            const next = [...reviewDrafts];
-                                                            next[index] = { ...next[index], rating: Number(event.target.value) };
-                                                            setReviewDrafts(next);
-                                                        }}
-                                                    >
-                                                        {Array.from({ length: 11 }, (_, ratingIndex) => ratingIndex / 2).map(rating => (
-                                                            <option key={rating} value={rating}>{rating} stars</option>
-                                                        ))}
-                                                    </select>
-                                                    <Button
-                                                        type="button"
-                                                        onClick={() => setReviewDrafts(reviewDrafts.filter((_, reviewIndex) => reviewIndex !== index))}
-                                                    >
-                                                        Remove
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <Button
-                                            type="button"
-                                            onClick={() => saveReviews.mutate()}
-                                            disabled={saveReviews.isPending}
-                                        >
-                                            {saveReviews.isPending ? 'Saving...' : 'Save Reviews'}
-                                        </Button>
-                                    </div>
                                     )}
 
                                     {isContactPage && contactSection && (
@@ -1416,7 +1564,7 @@ defineDashboardExtension({
                                                     ? 'Select Contact Logo'
                                                     : assetPickerMode === 'component-image'
                                                         ? 'Select Component Image'
-                                                    : 'Select Hero Banner'
+                                                        : 'Select Hero Banner'
                                     }
                                     onSelect={assets => {
                                         if (!assets[0]) {
