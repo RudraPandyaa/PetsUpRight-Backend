@@ -9,6 +9,7 @@ import {
     PageLayout,
     PageTitle,
     Switch,
+    Textarea,
     toast,
     useMutation,
     useQuery,
@@ -780,7 +781,34 @@ defineDashboardExtension({
                                 },
                             }));
                         }
+                        const textSections =
+                            page.sections.filter(section => section.type === 'text');
 
+                        for (const section of textSections) {
+                            const draft =
+                                genericDrafts[section.id] ??
+                                section.data ??
+                                {};
+
+                            const text = (draft.text ?? '').trim();
+
+                            if (!text) {
+                                throw new Error('Text component cannot be empty');
+                            }
+
+                            updates.push(
+                                api.mutate(updateCmsSectionMutation, {
+                                    input: {
+                                        id: section.id,
+                                        data: {
+                                            ...draft,
+                                            text,
+                                            publishedText: text,
+                                        },
+                                    },
+                                }),
+                            );
+                        }
                         for (const section of productSections) {
                             const draft =
                                 genericDrafts[section.id] ??
@@ -1059,14 +1087,24 @@ defineDashboardExtension({
                                                         <div key={section.id} className="border rounded-md p-4 space-y-3">
                                                             <h4 className="font-medium">{section.type} component</h4>
                                                             {section.type === 'text' && (
-                                                                <Input
-                                                                    value={draft.text ?? ''}
-                                                                    placeholder="Component text"
-                                                                    onChange={event => setGenericDrafts({
-                                                                        ...genericDrafts,
-                                                                        [section.id]: { ...draft, text: event.target.value },
-                                                                    })}
-                                                                />
+                                                                <div className="space-y-2">
+                                                                    <Label>Content</Label>
+
+                                                                    <Textarea
+                                                                        value={draft.text ?? ''}
+                                                                        placeholder="Enter page content..."
+                                                                        rows={20}
+                                                                        onChange={event =>
+                                                                            setGenericDrafts({
+                                                                                ...genericDrafts,
+                                                                                [section.id]: {
+                                                                                    ...draft,
+                                                                                    text: event.target.value,
+                                                                                },
+                                                                            })
+                                                                        }
+                                                                    />
+                                                                </div>
                                                             )}
                                                             {section.type === 'products' && (
                                                                 <div className="space-y-4">
