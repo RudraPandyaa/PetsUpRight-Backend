@@ -1,20 +1,74 @@
 {{> header title="Verify Your Email Address" }}
 
-<mj-section background-color="#fafafa">
-    <mj-column>
-        <mj-text color="#525252">
-            Thank you for creating an account. Click the button below to verify this email address and
-            complete the registration process:
+<mj-section background-color="#f8f6fb" padding="40px 20px">
+    <mj-column
+        background-color="#ffffff"
+        border-radius="16px"
+        padding="35px 30px"
+    >
+
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="28px"
+            font-weight="700"
+            color="#44476f"
+            padding-bottom="10px"
+        >
+            Verify Your Email
         </mj-text>
 
-        <mj-button font-family="Helvetica"
-                   background-color="#f45e43"
-                   color="white"
-                   href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}">
-            Verify Me!
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="16px"
+            line-height="26px"
+            color="#555555"
+            padding="10px 0 20px"
+        >
+            Thank you for creating an account with PetsUpRight!
+            Please verify your email address to complete your registration.
+        </mj-text>
+
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="14px"
+            line-height="22px"
+            color="#8465c8"
+            font-weight="700"
+            padding="0 0 20px"
+        >
+            This verification link is valid for 1 hour only.
+            Please verify your email within 1 hour.
+        </mj-text>
+
+        <mj-button
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="16px"
+            font-weight="700"
+            background-color="#8465c8"
+            color="#ffffff"
+            border-radius="8px"
+            padding="10px 0 25px"
+            href="{{ verifyEmailAddressUrl }}?token={{ verificationToken }}"
+        >
+            Verify My Email
         </mj-button>
+
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="13px"
+            line-height="20px"
+            color="#888888"
+            padding-top="5px"
+        >
+            If you did not create an account with PetsUpRight,
+            you can safely ignore this email.
+        </mj-text>
+
     </mj-column>
 </mj-section>
-
 
 {{> footer }}
