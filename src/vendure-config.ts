@@ -1,10 +1,13 @@
 import {
-    dummyPaymentHandler,
     DefaultJobQueuePlugin,
     DefaultSchedulerPlugin,
     DefaultSearchPlugin,
     VendureConfig,
     LanguageCode,
+    defaultShippingCalculator,
+    defaultShippingEligibilityChecker,
+    defaultPromotionActions,
+    defaultPromotionConditions,
 } from '@vendure/core';
 import { defaultEmailHandlers, EmailPlugin, FileBasedTemplateLoader } from '@vendure/email-plugin';
 import { AssetServerPlugin } from '@vendure/asset-server-plugin';
@@ -13,6 +16,9 @@ import { GraphiqlPlugin } from '@vendure/graphiql-plugin';
 import 'dotenv/config';
 import path from 'path';
 import { CloudinaryAssetStorageStrategy } from './cloudinary/cloudinary-asset-storage.strategy';
+import { CmsPlugin } from './plugins/cms/cms.plugin';
+import { razorpayPaymentHandler } from './plugins/razorpay/razorpay-payment-handler';
+import { RazorpayPlugin } from './plugins/razorpay/razorpay.plugin';
 const IS_DEV = process.env.APP_ENV === 'dev';
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
 // must take precedence over any value baked into the .env file at scaffold time.
@@ -39,8 +45,9 @@ export const config: VendureConfig = {
             password: process.env.SUPERADMIN_PASSWORD,
         },
         cookieOptions: {
-          secret: process.env.COOKIE_SECRET,
+            secret: process.env.COOKIE_SECRET,
         },
+        requireVerification: false,
     },
     dbConnectionOptions: {
         type: 'postgres',
@@ -51,7 +58,26 @@ export const config: VendureConfig = {
         ssl: true,
     },
     paymentOptions: {
-        paymentMethodHandlers: [dummyPaymentHandler],
+        paymentMethodHandlers: [
+            razorpayPaymentHandler,
+        ],
+    },
+    shippingOptions: {
+        shippingEligibilityCheckers: [
+            defaultShippingEligibilityChecker,
+        ],
+
+        shippingCalculators: [
+            defaultShippingCalculator,
+        ],
+    },
+    promotionOptions: {
+        promotionActions: [
+            ...defaultPromotionActions,
+        ],
+        promotionConditions: [
+            ...defaultPromotionConditions,
+        ],
     },
     // When adding or altering custom field definitions, the database will
     // need to be updated. See the "Migrations" section in README.md.
@@ -61,8 +87,15 @@ export const config: VendureConfig = {
                 name: 'petType',
                 type: 'string',
                 options: [
-                    { value: 'dog' },
-                    { value: 'cat' },
+                    { value: 'Dog' },
+                    { value: 'Cat' },
+                    { value: 'Bird' },
+                    { value: 'Hemster' },
+                    { value: 'Guinea Pig' },
+                    { value: 'Turtle' },
+                    { value: 'Rabbit' },
+                    { value: 'Fish' },
+                    { value: 'Horse' },
                 ],
                 label: [{ languageCode: LanguageCode.en, value: 'Pet Type' }],
                 description: [{ languageCode: LanguageCode.en, value: 'Select the pet this product is for' }],
@@ -100,6 +133,8 @@ export const config: VendureConfig = {
                 changeEmailAddressUrl: 'http://localhost:8080/verify-email-address-change'
             },
         }),
+        CmsPlugin.init({}),
+        RazorpayPlugin,
         DashboardPlugin.init({
             route: 'dashboard',
             appDir: IS_DEV
