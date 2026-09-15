@@ -1,133 +1,398 @@
-{{> header title="Order Receipt" }}
+{{> header title="Order Confirmation" }}
 
-<mj-raw>
-    <style type="text/css">
-    .callout {
-        background-color: #375a67;
-        padding: 15px 0;
-    }
-    .callout-large > div {
-        text-align: center !important;
-        color: #fff !important;
-        font-size: 16px !important;
-        font-weight: bold;
-        padding: 0;
-    }
-    .callout-small > div {
-        text-align: center !important;
-        color: #fff !important;
-        font-size: 14px !important;
-        padding: 0;
-    }
-    ul.address {
-        list-style-type: none;
-        padding: 0;
-    }
-    tr.order-row td {
-        border-bottom: 1px dashed #eee;
-    }
-    tr.order-row td:last-child {
-        text-align: center;
-    }
-    tr.total-row {
-        font-weight: bold;
-    }
-    .bg-off-white {
-        background-color: #f5f5f5;
-    }
-    </style>
-</mj-raw>
+<mj-section background-color="#f8f6fb" padding="35px 20px 10px">
+    <mj-column
+        background-color="#ffffff"
+        border-radius="16px"
+        padding="30px"
+    >
 
-<mj-section css-class="bg-off-white">
-    <mj-column>
-        <mj-text>
-            Dear {{ order.customer.firstName }} {{ order.customer.lastName }},
+        <!-- Order Confirmed -->
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="28px"
+            font-weight="700"
+            color="#44476f"
+            padding="0 0 8px"
+        >
+            Order Confirmed!
         </mj-text>
-        <mj-text>
-            Thank you for your order!
+
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="15px"
+            line-height="24px"
+            color="#555555"
+            padding="0 0 20px"
+        >
+            Thank you for your order, {{ order.customer.firstName }}!
+            We have received your order and will process it shortly.
         </mj-text>
+
+        <!-- Order Details -->
+        <mj-section
+            background-color="#f8f6fb"
+            border-radius="10px"
+            padding="15px 10px"
+        >
+            <mj-column>
+                <mj-text
+                    align="center"
+                    font-family="Helvetica, Arial, sans-serif"
+                    font-size="12px"
+                    font-weight="700"
+                    color="#777777"
+                    padding="0 0 5px"
+                >
+                    ORDER NUMBER
+                </mj-text>
+
+                <mj-text
+                    align="center"
+                    font-family="Helvetica, Arial, sans-serif"
+                    font-size="15px"
+                    font-weight="700"
+                    color="#44476f"
+                    padding="0"
+                >
+                    #{{ order.code }}
+                </mj-text>
+            </mj-column>
+
+            <mj-column>
+                <mj-text
+                    align="center"
+                    font-family="Helvetica, Arial, sans-serif"
+                    font-size="12px"
+                    font-weight="700"
+                    color="#777777"
+                    padding="0 0 5px"
+                >
+                    ORDER DATE
+                </mj-text>
+
+                <mj-text
+                    align="center"
+                    font-family="Helvetica, Arial, sans-serif"
+                    font-size="15px"
+                    font-weight="700"
+                    color="#44476f"
+                    padding="0"
+                >
+                    {{ formatDate order.orderPlacedAt }}
+                </mj-text>
+            </mj-column>
+
+            <mj-column>
+                <mj-text
+                    align="center"
+                    font-family="Helvetica, Arial, sans-serif"
+                    font-size="12px"
+                    font-weight="700"
+                    color="#777777"
+                    padding="0 0 5px"
+                >
+                    ORDER TOTAL
+                </mj-text>
+
+                <mj-text
+                    align="center"
+                    font-family="Helvetica, Arial, sans-serif"
+                    font-size="15px"
+                    font-weight="700"
+                    color="#8465c8"
+                    padding="0"
+                >
+                    {{ formatMoney order.totalWithTax order.currencyCode 'en' }}
+                </mj-text>
+            </mj-column>
+        </mj-section>
+
     </mj-column>
 </mj-section>
 
 
-<mj-section css-class="callout">
-    <mj-column>
-        <mj-text css-class="callout-large"><strong>Order Code</strong></mj-text>
-        <mj-text css-class="callout-small">{{ order.code }}</mj-text>
-    </mj-column>
-    <mj-column>
-        <mj-text css-class="callout-large"><strong>Order Date</strong></mj-text>
-        <mj-text css-class="callout-small">{{ formatDate order.orderPlacedAt }}</mj-text>
-    </mj-column>
-    <mj-column>
-        <mj-text css-class="callout-large"><strong>Total Price</strong></mj-text>
-        <mj-text css-class="callout-small">{{ formatMoney order.total order.currencyCode 'en' }}</mj-text>
-    </mj-column>
-</mj-section>
+<!-- Shipping Address -->
+<mj-section background-color="#f8f6fb" padding="10px 20px">
+    <mj-column
+        background-color="#ffffff"
+        border-radius="16px"
+        padding="25px 30px"
+    >
 
+        <mj-text
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="20px"
+            font-weight="700"
+            color="#44476f"
+            padding="0 0 15px"
+        >
+            Shipping Address
+        </mj-text>
 
-<mj-section css-class="bg-off-white">
-    <mj-column>
-        <mj-text>
+        <mj-text
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="15px"
+            line-height="24px"
+            color="#555555"
+            padding="0"
+        >
             {{#with order.shippingAddress }}
-                <h3>Shipping To: {{ fullName }}</h3>
-                <ul class="address">
-                    {{#if company}}<li>{{ company }}</li>{{/if}}
-                    {{#if streetLine1}}<li>{{ streetLine1 }}</li>{{/if}}
-                    {{#if streetLine2}}<li>{{ streetLine2 }}</li>{{/if}}
-                    {{#if city}}<li>{{ city }}</li>{{/if}}
-                    {{#if province}}<li>{{ province }}</li>{{/if}}
-                    {{#if postalCode}}<li>{{ postalCode }}</li>{{/if}}
-                    {{#if country}}<li>{{ country }}</li>{{/if}}
-                    {{#if phoneNumber}}<li>{{ phoneNumber }}</li>{{/if}}
-                </ul>
+
+                <strong>{{ fullName }}</strong><br />
+
+                {{#if company}}
+                    {{ company }}<br />
+                {{/if}}
+
+                {{#if streetLine1}}
+                    {{ streetLine1 }}<br />
+                {{/if}}
+
+                {{#if streetLine2}}
+                    {{ streetLine2 }}<br />
+                {{/if}}
+
+                {{#if city}}
+                    {{ city }}
+                {{/if}}
+
+                {{#if province}}
+                    , {{ province }}
+                {{/if}}
+
+                {{#if postalCode}}
+                    - {{ postalCode }}
+                {{/if}}
+
+                <br />
+
+                {{#if country}}
+                    {{ country }}
+                {{/if}}
+
+                {{#if phoneNumber}}
+                    <br />
+                    Phone: {{ phoneNumber }}
+                {{/if}}
+
             {{/with}}
         </mj-text>
+
     </mj-column>
 </mj-section>
 
-<mj-section>
-    <mj-column>
-        <mj-text>
-            <h3>Order Summary:</h3>
+
+<!-- Order Items -->
+<mj-section background-color="#f8f6fb" padding="10px 20px">
+    <mj-column
+        background-color="#ffffff"
+        border-radius="16px"
+        padding="25px 30px"
+    >
+
+        <mj-text
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="20px"
+            font-weight="700"
+            color="#44476f"
+            padding="0 0 15px"
+        >
+            Order Summary
         </mj-text>
-        <mj-table cellpadding="6px">
+
+        <mj-table
+            cellpadding="8px"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="14px"
+            color="#444444"
+        >
+
+            <!-- Table Header -->
+            <tr style="border-bottom: 2px solid #eeeeee;">
+                <th
+                    align="left"
+                    style="padding: 8px 5px; color: #777777;"
+                >
+                    Item
+                </th>
+
+                <th
+                    align="center"
+                    style="padding: 8px 5px; color: #777777;"
+                >
+                    Qty
+                </th>
+
+                <th
+                    align="right"
+                    style="padding: 8px 5px; color: #777777;"
+                >
+                    Price
+                </th>
+            </tr>
+
+            <!-- Products -->
             {{#each order.lines }}
-                <tr class="order-row">
-                    <td>
-                        <img alt="{{ productVariant.name }}"
-                             style="width: 50px; height: 50px;"
-                             src="{{ featuredAsset.preview }}?w=50&h=50" />
+                <tr style="border-bottom: 1px solid #eeeeee;">
+
+                    <td style="padding: 12px 5px;">
+                        <table cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                                <td style="padding-right: 10px;">
+                                    <img
+                                        alt="{{ productVariant.name }}"
+                                        style="width: 55px; height: 55px; object-fit: cover; border-radius: 8px;"
+                                        src="{{ featuredAsset.preview }}?w=55&h=55"
+                                    />
+                                </td>
+
+                                <td style="vertical-align: middle;">
+                                    <strong>{{ productVariant.name }}</strong>
+                                </td>
+                            </tr>
+                        </table>
                     </td>
-                    <td>{{ quantity }} x {{ productVariant.name }}</td>
-                    <td>{{ productVariant.quantity }}</td>
-                    <td>{{ formatMoney discountedLinePriceWithTax ../order.currencyCode 'en' }}</td>
+
+                    <td
+                        align="center"
+                        style="padding: 12px 5px;"
+                    >
+                        {{ quantity }}
+                    </td>
+
+                    <td
+                        align="right"
+                        style="padding: 12px 5px; font-weight: 600;"
+                    >
+                        {{ formatMoney discountedLinePriceWithTax ../order.currencyCode 'en' }}
+                    </td>
+
                 </tr>
             {{/each}}
+
+            <!-- Discounts -->
             {{#each order.discounts }}
-                <tr class="order-row">
-                    <td colspan="3">
-                        {{ description }}
+                <tr style="border-bottom: 1px solid #eeeeee;">
+
+                    <td
+                        colspan="2"
+                        style="padding: 10px 5px; color: #555555;"
+                    >
+                        Discount: {{ description }}
                     </td>
-                    <td>{{ formatMoney amount ../order.currencyCode 'en' }}</td>
+
+                    <td
+                        align="right"
+                        style="padding: 10px 5px;"
+                    >
+                        {{ formatMoney amount ../order.currencyCode 'en' }}
+                    </td>
+
                 </tr>
             {{/each}}
-            <tr class="order-row">
-                <td colspan="3">Sub-total:</td>
-                <td>{{ formatMoney order.subTotalWithTax order.currencyCode 'en' }}</td>
-            </tr>
-            {{#each shippingLines }}
-            <tr class="order-row">
-                <td colspan="3">Shipping ({{ shippingMethod.name }}):</td>
-                <td>{{ formatMoney priceWithTax ../order.currencyCode 'en' }}</td>
-            </tr>
-            {{/each}}
-            <tr class="order-row total-row">
-                <td colspan="3">Total:</td>
-                <td>{{ formatMoney order.totalWithTax order.currencyCode 'en' }}</td>
-            </tr>
+
         </mj-table>
+
     </mj-column>
 </mj-section>
+
+
+<!-- Order Totals -->
+<mj-section background-color="#f8f6fb" padding="10px 20px 35px">
+    <mj-column
+        background-color="#ffffff"
+        border-radius="16px"
+        padding="25px 30px"
+    >
+
+        <mj-text
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="20px"
+            font-weight="700"
+            color="#44476f"
+            padding="0 0 15px"
+        >
+            Payment Summary
+        </mj-text>
+
+        <mj-table
+            cellpadding="6px"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="14px"
+            color="#555555"
+        >
+
+            <tr>
+                <td style="padding: 6px 0;">
+                    Subtotal
+                </td>
+
+                <td
+                    align="right"
+                    style="padding: 6px 0;"
+                >
+                    {{ formatMoney order.subTotalWithTax order.currencyCode 'en' }}
+                </td>
+            </tr>
+
+            {{#each shippingLines }}
+                <tr>
+                    <td style="padding: 6px 0;">
+                        Shipping ({{ shippingMethod.name }})
+                    </td>
+
+                    <td
+                        align="right"
+                        style="padding: 6px 0;"
+                    >
+                        {{ formatMoney priceWithTax ../order.currencyCode 'en' }}
+                    </td>
+                </tr>
+            {{/each}}
+
+            <tr style="border-top: 2px solid #eeeeee;">
+                <td
+                    style="padding: 14px 0 6px; font-size: 17px; font-weight: 700; color: #44476f;"
+                >
+                    Total
+                </td>
+
+                <td
+                    align="right"
+                    style="padding: 14px 0 6px; font-size: 17px; font-weight: 700; color: #8465c8;"
+                >
+                    {{ formatMoney order.totalWithTax order.currencyCode 'en' }}
+                </td>
+            </tr>
+
+        </mj-table>
+
+    </mj-column>
+</mj-section>
+
+
+<!-- Closing Message -->
+<mj-section background-color="#ffffff" padding="25px 20px">
+    <mj-column>
+
+        <mj-text
+            align="center"
+            font-family="Helvetica, Arial, sans-serif"
+            font-size="14px"
+            line-height="22px"
+            color="#777777"
+            padding="0"
+        >
+            Thank you for shopping with <strong>PetsUpRight</strong>!
+            <br />
+            We will keep you updated about your order.
+        </mj-text>
+
+    </mj-column>
+</mj-section>
+
 
 {{> footer }}

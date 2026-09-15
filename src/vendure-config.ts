@@ -141,9 +141,9 @@ export const config: VendureConfig = {
       globalTemplateVars: {
         fromAddress: process.env.SMTP_FROM,
         verifyEmailAddressUrl: "http://localhost:3001/verify",
-        passwordResetUrl: "http://localhost:8080/password-reset",
+        passwordResetUrl: "http://localhost:3001/reset-password",
         changeEmailAddressUrl:
-          "http://localhost:8080/verify-email-address-change",
+          "http://localhost:3001/verify-email-address-change",
       },
     }),
     CmsPlugin.init({}),
