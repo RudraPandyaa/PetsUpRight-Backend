@@ -28,7 +28,8 @@
     "dotenv": "17.4.2",
     "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
-    "razorpay": "^2.9.8"
+    "razorpay": "^2.9.8",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vendure/cli": "3.7.2",

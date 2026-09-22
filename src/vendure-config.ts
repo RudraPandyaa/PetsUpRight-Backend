@@ -17,6 +17,7 @@ import {
 import { AssetServerPlugin } from "@vendure/asset-server-plugin";
 import { DashboardPlugin } from "@vendure/dashboard/plugin";
 import { GraphiqlPlugin } from "@vendure/graphiql-plugin";
+import { ProductImportPlugin } from "./plugins/product-import/product-import.plugin";
 import "dotenv/config";
 import path from "path";
 import { CloudinaryAssetStorageStrategy } from "./cloudinary/cloudinary-asset-storage.strategy";
@@ -40,9 +41,9 @@ export const config: VendureConfig = {
     // reasons.
     ...(IS_DEV
       ? {
-          adminApiDebug: true,
-          shopApiDebug: true,
-        }
+        adminApiDebug: true,
+        shopApiDebug: true,
+      }
       : {}),
   },
   authOptions: {
@@ -103,6 +104,28 @@ export const config: VendureConfig = {
           },
         ],
       },
+      {
+        name: 'isFood',
+        type: 'boolean',
+        defaultValue: false,
+        label: [{ languageCode: LanguageCode.en, value: 'Is this a food product?' }],
+      },
+      {
+        name: 'ingredients',
+        type: 'string',
+        list: true,
+        label: [{ languageCode: LanguageCode.en, value: 'Ingredients' }],
+      },
+      {
+        name: 'usageAndFeeding',
+        type: 'text',
+        label: [{ languageCode: LanguageCode.en, value: 'Usage & Feeding' }],
+      },
+      {
+        name: 'specifications',
+        type: 'text',
+        label: [{ languageCode: LanguageCode.en, value: 'Specifications' }],
+      },
     ],
   },
   plugins: [
@@ -147,6 +170,7 @@ export const config: VendureConfig = {
       },
     }),
     CmsPlugin.init({}),
+    ProductImportPlugin,
     RazorpayPlugin,
     DashboardPlugin.init({
       route: "dashboard",
