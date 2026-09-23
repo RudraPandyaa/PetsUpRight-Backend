@@ -18,6 +18,7 @@ import { AssetServerPlugin } from "@vendure/asset-server-plugin";
 import { DashboardPlugin } from "@vendure/dashboard/plugin";
 import { GraphiqlPlugin } from "@vendure/graphiql-plugin";
 import { ProductImportPlugin } from "./plugins/product-import/product-import.plugin";
+import { ProductReviewPlugin } from './plugins/product-review/product-review.plugin';
 import "dotenv/config";
 import path from "path";
 import { CloudinaryAssetStorageStrategy } from "./cloudinary/cloudinary-asset-storage.strategy";
@@ -172,6 +173,7 @@ export const config: VendureConfig = {
     CmsPlugin.init({}),
     ProductImportPlugin,
     RazorpayPlugin,
+    ProductReviewPlugin,
     DashboardPlugin.init({
       route: "dashboard",
       appDir: IS_DEV

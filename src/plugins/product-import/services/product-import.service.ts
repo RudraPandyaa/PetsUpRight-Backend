@@ -19,7 +19,7 @@ export class ProductImportService {
         private readonly variants: ProductVariantService,
         private readonly groups: ProductOptionGroupService,
         private readonly options: ProductOptionService,
-    ) {}
+    ) { }
 
     private async inspect(ctx: RequestContext, raw: unknown): Promise<{ rows: ImportRow[]; result: Result }> {
         const rows = this.parser.parse(raw);
@@ -51,9 +51,19 @@ export class ProductImportService {
             const first = productRows[0];
             const product = await this.products.create(ctx, {
                 enabled: true,
-                translations: [{ languageCode: ctx.languageCode ?? LanguageCode.en,
-                    name: first.productName, slug, description: first.description }],
-                customFields: first.petType ? { petType: first.petType } : undefined,
+                translations: [{
+                    languageCode: ctx.languageCode ?? LanguageCode.en,
+                    name: first.productName, slug, description: first.description
+                }],
+                customFields: {
+                    petType: first.petType || undefined,
+                    isFood: first.isFood,
+                    ingredients: first.isFood ? first.ingredients : [],
+                    usageAndFeeding: first.isFood
+                        ? first.usageAndFeeding || undefined
+                        : undefined,
+                    specifications: first.specifications || undefined,
+                },
             });
             const optionIds = new Map<string, string | number>();
             const groupNames = first.options.map(o => o.group);
@@ -73,15 +83,24 @@ export class ProductImportService {
                         code: code(optionName),
                         translations: [{ languageCode: ctx.languageCode ?? LanguageCode.en, name: optionName }],
                     });
-                    optionIds.set(`${groupName.toLowerCase()}|${optionName.toLowerCase()}`, option.id);
+                    optionIds.set(
+                        `${groupName.trim().toLowerCase()}|${optionName.trim().toLowerCase()}`,
+                        option.id,
+                    );
                 }
             }
             await this.variants.create(ctx, productRows.map(r => ({
                 productId: product.id, enabled: true, sku: r.sku,
                 price: Math.round(r.price * 100), stockOnHand: r.stock,
-                optionIds: r.options.map(o => optionIds.get(`${o.group.toLowerCase()}|${o.value.toLowerCase()}`)!),
-                translations: [{ languageCode: ctx.languageCode ?? LanguageCode.en,
-                    name: [r.productName, ...r.options.map(o => o.value)].join(' ') }],
+                optionIds: r.options.map(o =>
+                    optionIds.get(
+                        `${o.group.trim().toLowerCase()}|${o.value.trim().toLowerCase()}`,
+                    )!
+                ),
+                translations: [{
+                    languageCode: ctx.languageCode ?? LanguageCode.en,
+                    name: [r.productName, ...r.options.map(o => o.value)].join(' ')
+                }],
             })));
         }
         return result;
