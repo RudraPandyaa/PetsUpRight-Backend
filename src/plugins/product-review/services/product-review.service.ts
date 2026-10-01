@@ -47,6 +47,18 @@ export interface ProductRatingSummary {
     ratingCounts: RatingCount[];
 }
 
+export type ProductReviewEligibilityReason =
+    | 'LOGIN_REQUIRED'
+    | 'CUSTOMER_NOT_FOUND'
+    | 'PRODUCT_NOT_DELIVERED'
+    | 'ALREADY_REVIEWED';
+
+export interface ProductReviewEligibility {
+    canReview: boolean;
+    reason: ProductReviewEligibilityReason | null;
+    existingReview: ProductReview | null;
+}
+
 @Injectable()
 export class ProductReviewService {
     constructor(
@@ -230,6 +242,12 @@ export class ProductReviewService {
             product.id,
         );
 
+        if (!verifiedPurchase) {
+            throw new UserInputError(
+                'You can review this product only after your order has been delivered',
+            );
+        }
+
         const customerName =
             `${customer.firstName ?? ''} ${customer.lastName ?? ''}`.trim() ||
             'Customer';
@@ -391,6 +409,72 @@ export class ProductReviewService {
         return true;
     }
 
+    async getReviewEligibility(
+    ctx: RequestContext,
+    productId: ID,
+    ): Promise<ProductReviewEligibility> {
+        if (!ctx.activeUserId) {
+            return {
+                canReview: false,
+                reason: 'LOGIN_REQUIRED',
+                existingReview: null,
+            };
+        }
+
+        const customer =
+            await this.customerService.findOneByUserId(
+                ctx,
+                ctx.activeUserId,
+                true,
+            );
+
+        if (!customer) {
+            return {
+                canReview: false,
+                reason: 'CUSTOMER_NOT_FOUND',
+                existingReview: null,
+            };
+        }
+
+        const existingReview = await this.connection
+            .getRepository(ctx, ProductReview)
+            .findOne({
+                where: {
+                    productId,
+                    customerId: customer.id,
+                },
+            });
+
+        if (existingReview) {
+            return {
+                canReview: false,
+                reason: 'ALREADY_REVIEWED',
+                existingReview,
+            };
+        }
+
+        const hasDeliveredProduct =
+            await this.hasPurchasedProduct(
+                ctx,
+                customer.id,
+                productId,
+            );
+
+        if (!hasDeliveredProduct) {
+            return {
+                canReview: false,
+                reason: 'PRODUCT_NOT_DELIVERED',
+                existingReview: null,
+            };
+        }
+
+        return {
+            canReview: true,
+            reason: null,
+            existingReview: null,
+        };
+    }
+
     private validateReviewInput(input: SubmitProductReviewInput): void {
         if (
             !Number.isInteger(input.rating) ||
@@ -429,17 +513,26 @@ export class ProductReviewService {
         customerId: ID,
         productId: ID,
     ): Promise<boolean> {
-        const result = await this.connection
+        return this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
             .innerJoin('order.lines', 'line')
-            .innerJoin('line.productVariant', 'variant')
-            .where('order.customerId = :customerId', { customerId })
-            .andWhere('variant.productId = :productId', { productId })
-            .andWhere('order.active = :active', { active: false })
-            .andWhere('order.orderPlacedAt IS NOT NULL')
+            .innerJoin(
+                'line.productVariant',
+                'variant',
+            )
+            .where(
+                'order.customerId = :customerId',
+                { customerId },
+            )
+            .andWhere(
+                'variant.productId = :productId',
+                { productId },
+            )
+            .andWhere(
+                'order.state = :state',
+                { state: 'Delivered' },
+            )
             .getExists();
-
-        return result;
     }
 }

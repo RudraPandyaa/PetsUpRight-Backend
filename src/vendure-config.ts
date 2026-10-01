@@ -79,6 +79,7 @@ export const config: VendureConfig = {
     promotionActions: [...defaultPromotionActions],
     promotionConditions: [...defaultPromotionConditions],
   },
+  
   // When adding or altering custom field definitions, the database will
   // need to be updated. See the "Migrations" section in README.md.
   customFields: {

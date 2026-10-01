@@ -58,6 +58,19 @@ export const shopApiExtensions = gql`
         body: String!
     }
 
+    enum ProductReviewEligibilityReason {
+        LOGIN_REQUIRED
+        CUSTOMER_NOT_FOUND
+        PRODUCT_NOT_DELIVERED
+        ALREADY_REVIEWED
+    }
+
+    type ProductReviewEligibility {
+        canReview: Boolean!
+        reason: ProductReviewEligibilityReason
+        existingReview: ProductReview
+    }
+
     extend type Query {
         productReviews(
             productId: ID!
@@ -68,6 +81,9 @@ export const shopApiExtensions = gql`
         productRating(productId: ID!): ProductRatingSummary!
 
         featuredProductReviews(take: Int = 6): [ProductReview!]!
+        productReviewEligibility(
+            productId: ID!
+        ): ProductReviewEligibility!
     }
 
     extend type Mutation {

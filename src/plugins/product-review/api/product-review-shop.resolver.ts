@@ -64,4 +64,15 @@ export class ProductReviewShopResolver {
     ) {
         return this.productReviewService.submitReview(ctx, input);
     }
+
+    @Query()
+    productReviewEligibility(
+        @Ctx() ctx: RequestContext,
+        @Args('productId') productId: ID,
+    ) {
+        return this.productReviewService.getReviewEligibility(
+            ctx,
+            productId,
+        );
+    }
 }
