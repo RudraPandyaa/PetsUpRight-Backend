@@ -66,6 +66,12 @@ export const config: VendureConfig = {
     migrations: [path.join(__dirname, "./migrations/*.+(js|ts)")],
     logging: false,
     ssl: true,
+    extra: {
+      max: 10,
+      min: 1,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+  },
   },
   paymentOptions: {
     paymentMethodHandlers: [razorpayPaymentHandler],
