@@ -88,53 +88,268 @@ export const config: VendureConfig = {
   
   // When adding or altering custom field definitions, the database will
   // need to be updated. See the "Migrations" section in README.md.
-  customFields: {
-    Product: [
-      {
-        name: "petType",
-        type: "string",
-        options: [
-          { value: "Dog" },
-          { value: "Cat" },
-          { value: "Bird" },
-          { value: "Hemster" },
-          { value: "Guinea Pig" },
-          { value: "Turtle" },
-          { value: "Rabbit" },
-          { value: "Fish" },
-          { value: "Horse" },
-        ],
-        label: [{ languageCode: LanguageCode.en, value: "Pet Type" }],
-        description: [
+    customFields: {
+      Product: [
+          // Existing fields kept for frontend compatibility
           {
-            languageCode: LanguageCode.en,
-            value: "Select the pet this product is for",
+              name: 'petType',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Pet Type (Legacy)',
+                  },
+              ],
           },
-        ],
-      },
-      {
-        name: 'isFood',
-        type: 'boolean',
-        defaultValue: false,
-        label: [{ languageCode: LanguageCode.en, value: 'Is this a food product?' }],
-      },
-      {
-        name: 'ingredients',
-        type: 'string',
-        list: true,
-        label: [{ languageCode: LanguageCode.en, value: 'Ingredients' }],
-      },
-      {
-        name: 'usageAndFeeding',
-        type: 'text',
-        label: [{ languageCode: LanguageCode.en, value: 'Usage & Feeding' }],
-      },
-      {
-        name: 'specifications',
-        type: 'text',
-        label: [{ languageCode: LanguageCode.en, value: 'Specifications' }],
-      },
-    ],
+          {
+              name: 'isFood',
+              type: 'boolean',
+              defaultValue: false,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Is this a food product?',
+                  },
+              ],
+          },
+          {
+              name: 'ingredients',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Ingredients',
+                  },
+              ],
+          },
+          {
+              name: 'usageAndFeeding',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Usage & Feeding',
+                  },
+              ],
+          },
+          {
+              name: 'specifications',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Specifications',
+                  },
+              ],
+          },
+
+          // New OPN product fields
+          {
+              name: 'keyPoints',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Key Points',
+                  },
+              ],
+          },
+          {
+              name: 'analyticalConstituents',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Analytical Constituents',
+                  },
+              ],
+          },
+          {
+              name: 'countryOfOrigin',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Country of Origin',
+                  },
+              ],
+          },
+          {
+              name: 'manufacturerName',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Manufacturer',
+                  },
+              ],
+          },
+          {
+              name: 'manufacturerAddress',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Manufacturer Address',
+                  },
+              ],
+          },
+          {
+              name: 'supplierName',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Supplier',
+                  },
+              ],
+          },
+      ],
+
+      ProductVariant: [
+          {
+              name: 'barcode',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Barcode',
+                  },
+              ],
+          },
+          {
+              name: 'asin',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'ASIN',
+                  },
+              ],
+          },
+          {
+              name: 'unit',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Unit',
+                  },
+              ],
+          },
+          {
+              name: 'weightInGrams',
+              type: 'int',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Weight in grams',
+                  },
+              ],
+          },
+          {
+              name: 'packing',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Packing',
+                  },
+              ],
+          },
+          {
+              name: 'hsnCode',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'HSN Code',
+                  },
+              ],
+          },
+          {
+              name: 'gstPercentage',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'GST Percentage',
+                  },
+              ],
+          },
+          {
+              name: 'casePack',
+              type: 'int',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Case Pack',
+                  },
+              ],
+          },
+          {
+              name: 'shelfLifeYears',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Shelf Life in years',
+                  },
+              ],
+          },
+          {
+              name: 'packageLengthCm',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Package length (cm)',
+                  },
+              ],
+          },
+          {
+              name: 'packageWidthCm',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Package width (cm)',
+                  },
+              ],
+          },
+          {
+              name: 'packageHeightCm',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Package height (cm)',
+                  },
+              ],
+          },
+      ],
   },
   plugins: [
     GraphiqlPlugin.init(),
