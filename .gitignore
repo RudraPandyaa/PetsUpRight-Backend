@@ -7,3 +7,6 @@ static/email/test-emails
 .env
 .env.*
 !.env.example
+
+backups/
+*.backup
