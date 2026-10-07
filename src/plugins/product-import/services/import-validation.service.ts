@@ -36,10 +36,6 @@ export class ImportValidationService {
                 );
             }
 
-            if (!row.brand) {
-                addIssue(row, 'Brand is required');
-            }
-
             if (!row.sku) {
                 addIssue(
                     row,
@@ -55,10 +51,6 @@ export class ImportValidationService {
                     row,
                     'MRP must be greater than zero',
                 );
-            }
-
-            if (!row.petTypes.length) {
-                addIssue(row, 'Pet Type is required');
             }
 
             if (
