@@ -14,10 +14,10 @@ export const OPN_COLUMN_ALIASES = {
     sku: [
         'Item Code',
         'OPN Item Code',
+        'SKU',
         'Product Code',
         'Product Code 3',
         'New OPN Code',
-        'SKU',
     ],
 
     brand: [
@@ -37,19 +37,19 @@ export const OPN_COLUMN_ALIASES = {
 
     price: [
         'MRP',
+        'Price',
         'New MRP',
         'New MRP effective from Nov 2024',
         'NEW Reduce mrp',
-        'Price',
     ],
 
     weightOrCount: [
         'Weight',
-        'Pack size in Kgs',
         'Count',
         'Count (Bags)',
         'Count (Wipes)',
         'Count (Bags/Wipes)',
+        'Pack size in Kgs',
     ],
 
     unit: [

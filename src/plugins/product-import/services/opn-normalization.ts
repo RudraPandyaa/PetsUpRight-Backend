@@ -125,7 +125,7 @@ export function removeVariantSuffix(
 
     return cleaned
         .replace(
-            /\s*[-–(]?\s*\d+(?:\.\d+)?\s*(?:kg|g|gm|gram|grams|ml|l|ltr|litre|litres|qty|count|pc|pcs|piece|pieces|bag|bags|wipe|wipes)\s*\)?\s*$/i,
+            /\s*[-–(]?\s*\d+(?:[.,]\d+)?\s*[-–]?\s*(?:kg|g|gm|gram|grams|ml|l|ltr|litre|litres|qty|count|pc|pcs|piece|pieces|bag|bags|wipe|wipes)\s*\)?\s*$/i,
             '',
         )
         .trim();
@@ -152,4 +152,25 @@ export function createProductIdentity(
         productName: baseName,
         productSlug: groupKey,
     };
+}
+
+export function createVariantSku(
+    productGroupKey: string,
+    itemCode: string,
+    optionGroup: string,
+    optionValue: string,
+    rowNumber: number,
+): string {
+    const generated = slugify(
+        [
+            productGroupKey,
+            itemCode || 'no-item-code',
+            optionGroup,
+            optionValue || `row-${rowNumber}`,
+        ].join('-'),
+    );
+
+    return generated
+        .slice(0, 250)
+        .toUpperCase();
 }

@@ -498,10 +498,11 @@ export class ProductImportService {
 
                                 return {
                                     productId: product.id,
-                                    enabled: true,
+                                    enabled: row.price > 0,
                                     sku: row.sku,
-                                    price: Math.round(
-                                        row.price * 100,
+                                    price: Math.max(
+                                        0,
+                                        Math.round(row.price * 100),
                                     ),
                                     stockOnHand: row.stock,
                                     optionIds:
@@ -520,6 +521,9 @@ export class ProductImportService {
                                         },
                                     ],
                                     customFields: {
+                                        itemCode:
+                                            row.itemCode ||
+                                            undefined,
                                         barcode:
                                             row.barcode ||
                                             undefined,

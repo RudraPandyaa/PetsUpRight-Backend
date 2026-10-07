@@ -32,6 +32,7 @@ export type OPNImportRow = {
     supplierName: string;
 
     // Variant identity
+    itemCode: string;
     sku: string;
     barcode: string;
     asin: string;

@@ -33,6 +33,121 @@ type Result = {
     issues: { row: number; message: string }[];
 };
 
+type WorkbookRow = Record<string, unknown>;
+
+function normalizeExcelHeader(value: unknown): string {
+    return String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+const productHeaderNames = new Set([
+    'productname',
+    'opnproductname',
+    'opnproducttitle',
+    'productdescription',
+]);
+
+const itemCodeHeaderNames = new Set([
+    'itemcode',
+    'opnitemcode',
+    'sku',
+    'productcode',
+    'newopncode',
+    'productcode3',
+]);
+
+const priceHeaderNames = new Set([
+    'mrp',
+    'price',
+    'newmrp',
+    'newmrpeffectivefromnov2024',
+    'newreducemrp',
+]);
+
+function isOPNHeaderRow(row: unknown[]): boolean {
+    const cells = row.map(normalizeExcelHeader);
+
+    return (
+        cells.some(cell => productHeaderNames.has(cell)) &&
+        cells.some(cell => itemCodeHeaderNames.has(cell)) &&
+        cells.some(cell => priceHeaderNames.has(cell))
+    );
+}
+
+function createUniqueHeaders(row: unknown[]): string[] {
+    const counts = new Map<string, number>();
+
+    return row.map((value, index) => {
+        const original =
+            String(value ?? '').trim() ||
+            `__emptyColumn${index}`;
+
+        const normalized =
+            normalizeExcelHeader(original);
+
+        const count =
+            (counts.get(normalized) ?? 0) + 1;
+
+        counts.set(normalized, count);
+
+        return count === 1
+            ? original
+            : `${original}${count}`;
+    });
+}
+
+function parseOPNSheet(
+    sheet: XLSX.WorkSheet,
+    sheetName: string,
+): WorkbookRow[] {
+    const matrix =
+        XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+            header: 1,
+            defval: '',
+            raw: false,
+        });
+
+    const rows: WorkbookRow[] = [];
+    let activeHeaders: string[] | null = null;
+
+    matrix.forEach((cells, rowIndex) => {
+        if (isOPNHeaderRow(cells)) {
+            activeHeaders = createUniqueHeaders(cells);
+            return;
+        }
+
+        if (!activeHeaders) {
+            return;
+        }
+
+        const row: WorkbookRow = {};
+
+        activeHeaders.forEach((header, columnIndex) => {
+            if (!header.startsWith('__emptyColumn')) {
+                row[header] = cells[columnIndex] ?? '';
+            }
+        });
+
+        const containsData = Object.values(row).some(
+            value => String(value ?? '').trim() !== '',
+        );
+
+        if (!containsData) {
+            return;
+        }
+
+        rows.push({
+            ...row,
+            __sheetName: sheetName,
+            __rowNumber: rowIndex + 1,
+        });
+    });
+
+    return rows;
+}
+
 const headers = [
     'productSlug',
     'productName',
@@ -158,32 +273,42 @@ export function ImportProductsPage() {
                 { type: 'array' },
             );
 
-            const values = book.SheetNames.flatMap(sheetName => {
-                const sheet = book.Sheets[sheetName];
+            // const values = book.SheetNames.flatMap(sheetName => {
+            //     const sheet = book.Sheets[sheetName];
 
-                if (!sheet) {
-                    return [];
-                }
+            //     if (!sheet) {
+            //         return [];
+            //     }
 
-                const sheetRows =
-                    XLSX.utils.sheet_to_json<
-                        Record<string, unknown>
-                    >(sheet, {
-                        defval: '',
-                        raw: false,
-                    });
+            //     const sheetRows =
+            //         XLSX.utils.sheet_to_json<
+            //             Record<string, unknown>
+            //         >(sheet, {
+            //             defval: '',
+            //             raw: false,
+            //         });
 
-                return sheetRows.map((row, index) => ({
-                    ...row,
-                    __sheetName: sheetName,
-                    __rowNumber: index + 2,
-                }));
-            }).filter(row =>
-                Object.entries(row).some(
-                    ([key, value]) =>
-                        !key.startsWith('__') &&
-                        String(value ?? '').trim() !== '',
-                ),
+            //     return sheetRows.map((row, index) => ({
+            //         ...row,
+            //         __sheetName: sheetName,
+            //         __rowNumber: index + 2,
+            //     }));
+            // }).filter(row =>
+            //     Object.entries(row).some(
+            //         ([key, value]) =>
+            //             !key.startsWith('__') &&
+            //             String(value ?? '').trim() !== '',
+            //     ),
+            // );
+
+            const values = book.SheetNames.flatMap(
+            sheetName => {
+                    const sheet = book.Sheets[sheetName];
+
+                    return sheet
+                        ? parseOPNSheet(sheet, sheetName)
+                        : [];
+                },
             );
 
             if (!values.length) {

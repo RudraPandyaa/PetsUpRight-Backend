@@ -4,15 +4,35 @@ import type { OPNImportRow } from './opn-import.types';
 export type ImportIssue = { row: number; message: string };
 const norm = (s: string) => s.trim().toLowerCase();
 
+type OPNProductDetails = {
+    brand: string;
+    description: string;
+    petTypes: string;
+    primaryCategory: string;
+    secondaryCategory: string;
+    tertiaryCategory: string;
+};
+
+const OPN_PRODUCT_DETAIL_KEYS: Array<
+    keyof OPNProductDetails
+> = [
+    'brand',
+    'petTypes',
+    'primaryCategory',
+    'secondaryCategory',
+    'tertiaryCategory',
+];
+
 @Injectable()
 export class ImportValidationService {
     validateOPN(rows: OPNImportRow[]): ImportIssue[] {
         const issues: ImportIssue[] = [];
 
         const skus = new Map<string, OPNImportRow>();
-        const barcodes = new Map<string, OPNImportRow>();
+        // const barcodes = new Map<string, OPNImportRow>();
         const optionCombinations = new Set<string>();
-        const productDetails = new Map<string, string>();
+        const productDetails =
+            new Map<string, OPNProductDetails>();
 
         const addIssue = (
             row: OPNImportRow,
@@ -36,20 +56,37 @@ export class ImportValidationService {
                 );
             }
 
+            // if (!row.sku) {
+            //     addIssue(
+            //         row,
+            //         'Item Code / SKU is required',
+            //     );
+            // }
+
             if (!row.sku) {
                 addIssue(
                     row,
-                    'Item Code / SKU is required',
+                    'A unique internal SKU could not be generated',
                 );
             }
 
+            // if (
+            //     !Number.isFinite(row.price) ||
+            //     row.price <= 0
+            // ) {
+            //     addIssue(
+            //         row,
+            //         'MRP must be greater than zero',
+            //     );
+            // }
+
             if (
                 !Number.isFinite(row.price) ||
-                row.price <= 0
+                row.price < 0
             ) {
                 addIssue(
                     row,
-                    'MRP must be greater than zero',
+                    'MRP cannot be negative',
                 );
             }
 
@@ -101,24 +138,7 @@ export class ImportValidationService {
                 }
             }
 
-            const normalizedBarcode = norm(row.barcode);
-
-            if (normalizedBarcode) {
-                const existingBarcode =
-                    barcodes.get(normalizedBarcode);
-
-                if (existingBarcode) {
-                    addIssue(
-                        row,
-                        `Duplicate barcode ${row.barcode}; ` +
-                        `first found in ` +
-                        `${existingBarcode.sheetName} row ` +
-                        `${existingBarcode.rowNumber}`,
-                    );
-                } else {
-                    barcodes.set(normalizedBarcode, row);
-                }
-            }
+            // const normalizedBarcode = norm(row.barcode);
 
             if (row.optionValue) {
                 const combination = [
@@ -138,38 +158,73 @@ export class ImportValidationService {
                 }
             }
 
-            const productSignature = JSON.stringify({
+            const currentDetails: OPNProductDetails = {
                 brand: norm(row.brand),
                 description: norm(row.description),
                 petTypes: [...row.petTypes]
                     .map(norm)
-                    .sort(),
+                    .sort()
+                    .join('|'),
                 primaryCategory:
                     norm(row.primaryCategory),
                 secondaryCategory:
                     norm(row.secondaryCategory),
                 tertiaryCategory:
                     norm(row.tertiaryCategory),
-            });
+            };
 
-            const previousSignature =
+            const previousDetails =
                 productDetails.get(row.productGroupKey);
 
-            if (
-                previousSignature &&
-                previousSignature !== productSignature
-            ) {
-                addIssue(
-                    row,
-                    'Product-level details differ between ' +
-                    'variants grouped into the same product',
-                );
-            } else {
+            if (!previousDetails) {
                 productDetails.set(
                     row.productGroupKey,
-                    productSignature,
+                    currentDetails,
+                );
+
+                continue;
+            }
+
+            const conflictingFields =
+                OPN_PRODUCT_DETAIL_KEYS.filter(key => {
+                    const previousValue =
+                        previousDetails[key];
+                    const currentValue =
+                        currentDetails[key];
+
+                    return Boolean(
+                        previousValue &&
+                        currentValue &&
+                        previousValue !== currentValue,
+                    );
+                });
+
+            if (conflictingFields.length > 0) {
+                addIssue(
+                    row,
+                    'Product-level values conflict for: ' +
+                    conflictingFields.join(', '),
                 );
             }
+
+            const mergedDetails = {
+                ...previousDetails,
+            };
+
+            for (const key of OPN_PRODUCT_DETAIL_KEYS) {
+                if (
+                    !mergedDetails[key] &&
+                    currentDetails[key]
+                ) {
+                    mergedDetails[key] =
+                        currentDetails[key];
+                }
+            }
+
+            productDetails.set(
+                row.productGroupKey,
+                mergedDetails,
+            );
         }
 
         return issues;

@@ -11,6 +11,7 @@ import {
     normalizePetTypes,
     normalizeText,
     optionalNumber,
+    createVariantSku,
 } from './opn-normalization';
 
 type RawRow = Record<string, unknown>;
@@ -178,6 +179,71 @@ function inferPetTypes(
     return inferFromText(genericName);
 }
 
+function isRepeatedHeaderRow(
+    row: OPNImportRow,
+): boolean {
+    const productName =
+        row.productName.trim().toLowerCase();
+    const itemCode =
+        row.itemCode.trim().toLowerCase();
+    const barcode =
+        row.barcode.trim().toLowerCase();
+    const optionValue =
+        row.optionValue.trim().toLowerCase();
+
+    let matches = 0;
+
+    if (
+        productName === 'product name' ||
+        productName === 'opn product name' ||
+        productName === 'opn product title' ||
+        productName === 'product description'
+    ) {
+        matches++;
+    }
+
+    if (
+        itemCode === 'item code' ||
+        itemCode === 'opn item code' ||
+        itemCode === 'sku' ||
+        itemCode === 'product code' ||
+        itemCode === 'new opn code' ||
+        itemCode === 'product code 3'
+    ){
+        matches++;
+    }
+
+    if (
+        barcode === 'barcode' ||
+        barcode === 'ean' ||
+        barcode === 'ean code'
+    ) {
+        matches++;
+    }
+
+    if (
+        optionValue === 'unit' ||
+        optionValue === 'unit (drop down)' ||
+        optionValue === 'unit (dropdown)'
+    ) {
+        matches++;
+    }
+
+    return matches >= 2;
+}
+
+function createRowSignature(
+    row: OPNImportRow,
+): string {
+    const {
+        sheetName: _sheetName,
+        rowNumber: _rowNumber,
+        ...content
+    } = row;
+
+    return JSON.stringify(content);
+}
+
 export function parseOPNRows(
     data: unknown,
 ): OPNImportRow[] {
@@ -193,7 +259,7 @@ export function parseOPNRows(
         );
     }
 
-    return data.map((value, index) => {
+    const rows = data.map((value, index) => {
         const rawRow = value as RawRow;
         const headers = createHeaderMap(rawRow);
 
@@ -224,6 +290,18 @@ export function parseOPNRows(
         const option = createVariantOption(
             weightOrCount,
             unit,
+        );
+
+        const itemCode = normalizeText(
+            getValue(headers, 'sku'),
+        );
+
+        const generatedSku = createVariantSku(
+            identity.productGroupKey,
+            itemCode,
+            option.group,
+            option.value,
+            rowNumber,
         );
 
         const duplicateDescription = headers.get(
@@ -341,9 +419,9 @@ export function parseOPNRows(
             ),
             supplierName,
 
-            sku: normalizeText(
-                getValue(headers, 'sku'),
-            ),
+            itemCode,
+            sku: generatedSku,
+
             barcode: normalizeText(
                 getValue(headers, 'barcode'),
             ),
@@ -399,5 +477,32 @@ export function parseOPNRows(
                 getValue(headers, 'imageUrl'),
             ),
         };
+    });
+    const meaningfulRows = rows.filter(row => {
+        const hasProductIdentity =
+            Boolean(row.productName) ||
+            Boolean(row.itemCode);
+
+        const hasPrice =
+            Number.isFinite(row.price) &&
+            row.price > 0;
+
+        return (
+            (hasProductIdentity || hasPrice) &&
+            !isRepeatedHeaderRow(row)
+        );
+    });
+
+    const signatures = new Set<string>();
+
+    return meaningfulRows.filter(row => {
+        const signature = createRowSignature(row);
+
+        if (signatures.has(signature)) {
+            return false;
+        }
+
+        signatures.add(signature);
+        return true;
     });
 }

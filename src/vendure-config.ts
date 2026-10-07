@@ -226,6 +226,17 @@ export const config: VendureConfig = {
       ],
 
       ProductVariant: [
+        {
+            name: 'itemCode',
+            type: 'string',
+            nullable: true,
+            label: [
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Client Item Code',
+                },
+            ],
+        },
           {
               name: 'barcode',
               type: 'string',
