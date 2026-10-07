@@ -50,6 +50,8 @@ const unique = (values: string[]): string[] => {
 export class OpnTaxonomyService {
     private readonly facetCache = new Map<string, Facet>();
     private readonly facetValueCache = new Map<string, ID>();
+    private readonly loadedFacetValues =
+        new Set<string>();
     private readonly collectionCache = new Map<string, ID>();
 
     constructor(
@@ -152,17 +154,55 @@ export class OpnTaxonomyService {
             isPrivate,
         );
 
-        const existingValues =
-            await this.facetValues.findByFacetId(
-                ctx,
-                facet.id,
-            );
-
-        let facetValue = existingValues.find(
-            item =>
-                normalize(item.code) === normalize(code) ||
-                normalize(item.name) === normalize(name),
+        const facetCacheKey = this.scopeKey(
+            ctx,
+            definition.code,
         );
+
+        if (!this.loadedFacetValues.has(facetCacheKey)) {
+            const existingValues =
+                await this.facetValues.findByFacetId(
+                    ctx,
+                    facet.id,
+                );
+
+            for (const existingValue of existingValues) {
+                const codeKey = this.scopeKey(
+                    ctx,
+                    `${definition.code}:${normalize(
+                        existingValue.code,
+                    )}`,
+                );
+
+                const nameKey = this.scopeKey(
+                    ctx,
+                    `${definition.code}:${normalize(
+                        existingValue.name,
+                    )}`,
+                );
+
+                this.facetValueCache.set(
+                    codeKey,
+                    existingValue.id,
+                );
+
+                this.facetValueCache.set(
+                    nameKey,
+                    existingValue.id,
+                );
+            }
+
+            this.loadedFacetValues.add(facetCacheKey);
+        }
+
+        const existingId =
+            this.facetValueCache.get(cacheKey);
+
+        if (existingId !== undefined) {
+            return existingId;
+        }
+
+        let facetValue;
 
         if (!facetValue) {
             facetValue = await this.facetValues.create(

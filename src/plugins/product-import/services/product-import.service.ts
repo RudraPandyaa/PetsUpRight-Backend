@@ -17,7 +17,8 @@ import {
 } from './import-validation.service';
 import type { OPNImportRow } from './opn-import.types';
 import { SpreadsheetParserService } from './spreadsheet-parser.service';
-
+import { ImportProfiler } from './import-profiler';
+import { forEachWithConcurrency } from './async-pool';
 type Result = {
     products: number;
     variants: number;
@@ -96,47 +97,55 @@ export class ProductImportService {
                 .filter(Boolean),
         );
 
-        for (const slug of productSlugs) {
-            const existingProduct =
-                await this.products.findOneBySlug(ctx, slug);
+        await forEachWithConcurrency(
+            [...productSlugs],
+            10,
+            async slug => {
+                const existingProduct =
+                    await this.products.findOneBySlug(
+                        ctx,
+                        slug,
+                    );
 
-            if (existingProduct) {
-                const row = rows.find(
-                    item => item.productSlug === slug,
-                );
+                if (existingProduct) {
+                    const row = rows.find(
+                        item =>
+                            item.productSlug === slug,
+                    );
 
-                issues.push({
-                    row: row?.rowNumber ?? 0,
-                    message:
-                        `Product slug ${slug} already exists`,
-                });
-            }
-        }
+                    issues.push({
+                        row: row?.rowNumber ?? 0,
+                        message:
+                            `Product slug ${slug} already exists`,
+                    });
+                }
+            },
+        );
 
-        for (const row of rows) {
-            if (!row.sku) {
-                continue;
-            }
-
-            const existingVariant =
-                await this.variants.findAll(ctx, {
-                    take: 1,
-                    filter: {
-                        sku: {
-                            eq: row.sku,
+        await forEachWithConcurrency(
+            rows.filter(row => Boolean(row.sku)),
+            10,
+            async row => {
+                const existingVariant =
+                    await this.variants.findAll(ctx, {
+                        take: 1,
+                        filter: {
+                            sku: {
+                                eq: row.sku,
+                            },
                         },
-                    },
-                });
+                    });
 
-            if (existingVariant.totalItems > 0) {
-                issues.push({
-                    row: row.rowNumber,
-                    message:
-                        `[${row.sheetName}] SKU ${row.sku} ` +
-                        'already exists',
-                });
-            }
-        }
+                if (existingVariant.totalItems > 0) {
+                    issues.push({
+                        row: row.rowNumber,
+                        message:
+                            `[${row.sheetName}] ` +
+                            `SKU ${row.sku} already exists`,
+                    });
+                }
+            },
+        );
 
         return {
             rows,
@@ -152,8 +161,21 @@ export class ProductImportService {
         _ctx: RequestContext,
         raw: unknown,
     ): Promise<Result> {
+        const profiler =
+            new ImportProfiler('OPN preview');
+
         const rows = this.parser.parseOPN(raw);
-        const issues = this.validation.validateOPN(rows);
+
+        profiler.mark('spreadsheet parsed', {
+            rows: rows.length,
+        });
+
+        const issues =
+            this.validation.validateOPN(rows);
+
+        profiler.mark('rows validated', {
+            errors: issues.length,
+        });
 
         const products = new Set(
             rows
@@ -161,21 +183,43 @@ export class ProductImportService {
                 .filter(Boolean),
         );
 
-        return {
+        const result = {
             products: products.size,
             variants: rows.length,
             issues,
         };
+
+        profiler.finish({
+            products: result.products,
+            variants: result.variants,
+            errors: result.issues.length,
+        });
+
+        return result;
     }
 
     async import(
         ctx: RequestContext,
         raw: unknown,
     ): Promise<Result> {
+        const profiler =
+            new ImportProfiler('OPN import');
+
         const { rows, result } =
             await this.inspect(ctx, raw);
 
+        profiler.mark('inspection completed', {
+            rows: rows.length,
+            errors: result.issues.length,
+        });
+
         if (result.issues.length > 0) {
+            profiler.finish({
+                rows: rows.length,
+                errors: result.issues.length,
+                stoppedBeforeImport: true,
+            });
+
             return result;
         }
 
@@ -208,16 +252,22 @@ export class ProductImportService {
                         sheetName: string;
                     }> = [];
 
-                    for (
-                        const productRows of batches.values()
-                    ) {
+                    for (const productRows of batches.values()) {
                         const first = productRows[0];
+                        const productProfiler = new ImportProfiler(
+                            `OPN product ${first.productSlug}`,
+                        );
 
                         const taxonomy =
                             await this.taxonomy.prepareProduct(
                                 transactionCtx,
                                 productRows,
                             );
+
+                        productProfiler.mark('taxonomy prepared', {
+                            facetValues: taxonomy.facetValueIds.length,
+                            collections: taxonomy.collectionIds.length,
+                        });
 
                         for (
                             const collectionId
@@ -319,6 +369,10 @@ export class ProductImportService {
                                 },
                             );
 
+                        productProfiler.mark('product created', {
+                            productId: product.id,
+                        });
+
                         const rowsWithOptions =
                             productRows.filter(
                                 row =>
@@ -417,6 +471,14 @@ export class ProductImportService {
                             }
                         }
 
+                        productProfiler.mark(
+                            'option groups and values created',
+                            {
+                                groups: groupNames.length,
+                                options: optionIds.size,
+                            },
+                        );
+
                         await this.variants.create(
                             transactionCtx,
                             productRows.map(row => {
@@ -499,6 +561,15 @@ export class ProductImportService {
                             }),
                         );
 
+                        productProfiler.mark('variants created', {
+                            variants: productRows.length,
+                        });
+
+                        productProfiler.finish({
+                            productId: product.id,
+                            variants: productRows.length,
+                        });
+
                         const imageUrl = firstValue(
                             productRows,
                             row => row.imageUrl,
@@ -526,42 +597,65 @@ export class ProductImportService {
                     };
                 },
             );
+            profiler.mark(
+                'database transaction completed',
+                {
+                    products: result.products,
+                    variants: result.variants,
+                },
+            );
 
-        await this.taxonomy.refreshCollections(
+                await this.taxonomy.refreshCollections(
             ctx,
             transactionOutput.collectionIds,
         );
 
-        for (
-            const image
-            of transactionOutput.productImages
-        ) {
-            const imported =
-                await this.assetImporter.importImage(
-                    ctx,
-                    image.imageUrl,
-                    image.fileBaseName,
-                );
+        profiler.mark('collections refreshed', {
+            collections:
+                transactionOutput.collectionIds.length,
+        });
 
-            if (imported.assetId !== undefined) {
-                await this.products.update(ctx, {
-                    id: image.productId,
-                    assetIds: [imported.assetId],
-                    featuredAssetId:
-                        imported.assetId,
-                });
-            }
+        await forEachWithConcurrency(
+            transactionOutput.productImages,
+            3,
+            async image => {
+                const imported =
+                    await this.assetImporter.importImage(
+                        ctx,
+                        image.imageUrl,
+                        image.fileBaseName,
+                    );
 
-            if (imported.error) {
-                result.issues.push({
-                    row: image.rowNumber,
-                    message:
-                        `[${image.sheetName}] Product was ` +
-                        `imported, but its image failed: ` +
-                        imported.error,
-                });
-            }
-        }
+                if (imported.assetId !== undefined) {
+                    await this.products.update(ctx, {
+                        id: image.productId,
+                        assetIds: [imported.assetId],
+                        featuredAssetId: imported.assetId,
+                    });
+                }
+
+                if (imported.error) {
+                    result.issues.push({
+                        row: image.rowNumber,
+                        message:
+                            `[${image.sheetName}] Product was ` +
+                            `imported, but its image failed: ` +
+                            imported.error,
+                    });
+                }
+            },
+        );
+
+        profiler.mark('images processed', {
+            images: transactionOutput.productImages.length,
+        });
+
+        profiler.finish({
+            products: result.products,
+            variants: result.variants,
+            errors: result.issues.length,
+            images: transactionOutput.productImages.length,
+        });
 
         return result;
     }
