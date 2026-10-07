@@ -5,9 +5,10 @@ import { ImportValidationService } from './services/import-validation.service';
 import { ProductImportService } from './services/product-import.service';
 import { SpreadsheetParserService } from './services/spreadsheet-parser.service';
 import { OpnTaxonomyService } from './services/opn-taxonomy.service';
+import { OpnAssetService } from './services/opn-asset.service';
 @VendurePlugin({
     imports: [PluginCommonModule],
-    providers: [SpreadsheetParserService, ImportValidationService, ProductImportService, OpnTaxonomyService],
+    providers: [SpreadsheetParserService, ImportValidationService, ProductImportService, OpnTaxonomyService, OpnAssetService],
     adminApiExtensions: { schema: productImportSchema, resolvers: [ProductImportResolver] },
     dashboard: './dashboard/index.tsx',
     compatibility: '^3.7.0',
