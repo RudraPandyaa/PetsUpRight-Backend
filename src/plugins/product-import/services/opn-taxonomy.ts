@@ -25,6 +25,10 @@ export const OPN_FACETS = {
         code: 'packing-type',
         name: 'Packing Type',
     },
+    collectionPath: {
+        code: 'collection-path',
+        name: 'Collection Path',
+    },
 } as const;
 
 export const PET_TYPE_ALIASES: Record<string, string> = {

@@ -7,7 +7,7 @@ import {
     ProductVariantService,
     RequestContext,
 } from '@vendure/core';
-
+import { OpnTaxonomyService } from './opn-taxonomy.service';
 import {
     ImportIssue,
     ImportValidationService,
@@ -68,6 +68,7 @@ export class ProductImportService {
     constructor(
         private readonly parser: SpreadsheetParserService,
         private readonly validation: ImportValidationService,
+        private readonly taxonomy: OpnTaxonomyService,
         private readonly products: ProductService,
         private readonly variants: ProductVariantService,
         private readonly groups: ProductOptionGroupService,
@@ -186,10 +187,18 @@ export class ProductImportService {
 
         const languageCode =
             ctx.languageCode ?? LanguageCode.en;
-
+        const affectedCollectionIds = new Set<string | number>();
         for (const productRows of batches.values()) {
             const first = productRows[0];
+            const taxonomy =
+                await this.taxonomy.prepareProduct(
+                    ctx,
+                    productRows,
+                );
 
+            for (const collectionId of taxonomy.collectionIds) {
+                affectedCollectionIds.add(collectionId);
+            }
             const petTypes = uniqueValues(
                 productRows.flatMap(row => row.petTypes),
             );
@@ -198,6 +207,7 @@ export class ProductImportService {
                 ctx,
                 {
                     enabled: true,
+                    facetValueIds: taxonomy.facetValueIds,
                     translations: [
                         {
                             languageCode,
@@ -404,7 +414,10 @@ export class ProductImportService {
                 }),
             );
         }
-
+        await this.taxonomy.refreshCollections(
+            ctx,
+            [...affectedCollectionIds],
+        );
         return result;
     }
 }
