@@ -1,14 +1,67 @@
 import { Injectable } from '@nestjs/common';
 import {
-    LanguageCode, ProductOptionGroupService, ProductOptionService,
-    ProductService, ProductVariantService, RequestContext,
+    LanguageCode,
+    ProductOptionGroupService,
+    ProductOptionService,
+    ProductService,
+    ProductVariantService,
+    RequestContext,
 } from '@vendure/core';
-import { ImportValidationService, ImportIssue } from './import-validation.service';
-import { ImportRow, SpreadsheetParserService } from './spreadsheet-parser.service';
 
-const match = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const code = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-type Result = { products: number; variants: number; issues: ImportIssue[] };
+import {
+    ImportIssue,
+    ImportValidationService,
+} from './import-validation.service';
+import type { OPNImportRow } from './opn-import.types';
+import { SpreadsheetParserService } from './spreadsheet-parser.service';
+
+type Result = {
+    products: number;
+    variants: number;
+    issues: ImportIssue[];
+};
+
+const normalize = (value: string): string =>
+    value.trim().toLowerCase();
+
+const createCode = (value: string): string =>
+    value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+const firstValue = (
+    rows: OPNImportRow[],
+    selector: (row: OPNImportRow) => string,
+): string => {
+    for (const row of rows) {
+        const value = selector(row).trim();
+
+        if (value) {
+            return value;
+        }
+    }
+
+    return '';
+};
+
+const uniqueValues = (values: string[]): string[] => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    for (const value of values) {
+        const trimmed = value.trim();
+        const normalized = normalize(trimmed);
+
+        if (trimmed && !seen.has(normalized)) {
+            seen.add(normalized);
+            result.push(trimmed);
+        }
+    }
+
+    return result;
+};
 
 @Injectable()
 export class ProductImportService {
@@ -19,33 +72,82 @@ export class ProductImportService {
         private readonly variants: ProductVariantService,
         private readonly groups: ProductOptionGroupService,
         private readonly options: ProductOptionService,
-    ) { }
+    ) {}
 
-    private async inspect(ctx: RequestContext, raw: unknown): Promise<{ rows: ImportRow[]; result: Result }> {
-        const rows = this.parser.parse(raw);
-        const issues = this.validation.validate(rows);
-        const seen = new Set<string>();
-        for (const r of rows) {
-            if (seen.has(r.productSlug)) continue;
-            seen.add(r.productSlug);
-            if (await this.products.findOneBySlug(ctx, r.productSlug))
-                issues.push({ row: r.rowNumber, message: `Product slug ${r.productSlug} already exists` });
+    private async inspect(
+        ctx: RequestContext,
+        raw: unknown,
+    ): Promise<{
+        rows: OPNImportRow[];
+        result: Result;
+    }> {
+        const rows = this.parser.parseOPN(raw);
+        const issues = this.validation.validateOPN(rows);
+
+        const productSlugs = new Set(
+            rows
+                .map(row => row.productSlug)
+                .filter(Boolean),
+        );
+
+        for (const slug of productSlugs) {
+            const existingProduct =
+                await this.products.findOneBySlug(ctx, slug);
+
+            if (existingProduct) {
+                const row = rows.find(
+                    item => item.productSlug === slug,
+                );
+
+                issues.push({
+                    row: row?.rowNumber ?? 0,
+                    message:
+                        `Product slug ${slug} already exists`,
+                });
+            }
         }
-        // Vendure's SKU filter also catches variants on other products.
-        for (const r of rows) {
-            if (!r.sku) continue;
-            const existing = await this.variants.findAll(ctx, { take: 1, filter: { sku: { eq: r.sku } } });
-            if (existing.totalItems) issues.push({ row: r.rowNumber, message: `SKU ${r.sku} already exists` });
+
+        for (const row of rows) {
+            if (!row.sku) {
+                continue;
+            }
+
+            const existingVariant =
+                await this.variants.findAll(ctx, {
+                    take: 1,
+                    filter: {
+                        sku: {
+                            eq: row.sku,
+                        },
+                    },
+                });
+
+            if (existingVariant.totalItems > 0) {
+                issues.push({
+                    row: row.rowNumber,
+                    message:
+                        `[${row.sheetName}] SKU ${row.sku} ` +
+                        'already exists',
+                });
+            }
         }
-        return { rows, result: { products: seen.size, variants: rows.length, issues } };
+
+        return {
+            rows,
+            result: {
+                products: productSlugs.size,
+                variants: rows.length,
+                issues,
+            },
+        };
     }
+
     async preview(
         _ctx: RequestContext,
         raw: unknown,
     ): Promise<Result> {
         const rows = this.parser.parseOPN(raw);
-        const issues =
-            this.validation.validateOPN(rows);
+        const issues = this.validation.validateOPN(rows);
 
         const products = new Set(
             rows
@@ -59,67 +161,250 @@ export class ProductImportService {
             issues,
         };
     }
-    async import(ctx: RequestContext, raw: unknown): Promise<Result> {
-        const { rows, result } = await this.inspect(ctx, raw);
-        if (result.issues.length) return result;
-        const batches = new Map<string, ImportRow[]>();
-        for (const row of rows) batches.set(row.productSlug, [...(batches.get(row.productSlug) ?? []), row]);
-        for (const [slug, productRows] of batches) {
+
+    async import(
+        ctx: RequestContext,
+        raw: unknown,
+    ): Promise<Result> {
+        const { rows, result } =
+            await this.inspect(ctx, raw);
+
+        if (result.issues.length > 0) {
+            return result;
+        }
+
+        const batches =
+            new Map<string, OPNImportRow[]>();
+
+        for (const row of rows) {
+            const existing =
+                batches.get(row.productGroupKey) ?? [];
+
+            existing.push(row);
+            batches.set(row.productGroupKey, existing);
+        }
+
+        const languageCode =
+            ctx.languageCode ?? LanguageCode.en;
+
+        for (const productRows of batches.values()) {
             const first = productRows[0];
-            const product = await this.products.create(ctx, {
-                enabled: true,
-                translations: [{
-                    languageCode: ctx.languageCode ?? LanguageCode.en,
-                    name: first.productName, slug, description: first.description
-                }],
-                customFields: {
-                    petType: first.petType || undefined,
-                    isFood: first.isFood,
-                    ingredients: first.isFood ? first.ingredients : [],
-                    usageAndFeeding: first.isFood
-                        ? first.usageAndFeeding || undefined
-                        : undefined,
-                    specifications: first.specifications || undefined,
+
+            const petTypes = uniqueValues(
+                productRows.flatMap(row => row.petTypes),
+            );
+
+            const product = await this.products.create(
+                ctx,
+                {
+                    enabled: true,
+                    translations: [
+                        {
+                            languageCode,
+                            name: first.productName,
+                            slug: first.productSlug,
+                            description: firstValue(
+                                productRows,
+                                row => row.description,
+                            ),
+                        },
+                    ],
+                    customFields: {
+                        petType:
+                            petTypes.join(', ') || undefined,
+                        isFood: productRows.some(
+                            row => row.isFood,
+                        ),
+                        ingredients:
+                            firstValue(
+                                productRows,
+                                row => row.ingredients,
+                            ) || undefined,
+                        usageAndFeeding:
+                            firstValue(
+                                productRows,
+                                row => row.usageAndFeeding,
+                            ) || undefined,
+                        keyPoints:
+                            firstValue(
+                                productRows,
+                                row => row.keyPoints,
+                            ) || undefined,
+                        analyticalConstituents:
+                            firstValue(
+                                productRows,
+                                row =>
+                                    row.analyticalConstituents,
+                            ) || undefined,
+                        countryOfOrigin:
+                            firstValue(
+                                productRows,
+                                row => row.countryOfOrigin,
+                            ) || undefined,
+                        manufacturerName:
+                            firstValue(
+                                productRows,
+                                row => row.manufacturerName,
+                            ) || undefined,
+                        manufacturerAddress:
+                            firstValue(
+                                productRows,
+                                row =>
+                                    row.manufacturerAddress,
+                            ) || undefined,
+                        supplierName:
+                            firstValue(
+                                productRows,
+                                row => row.supplierName,
+                            ) || undefined,
+                    },
                 },
-            });
-            const optionIds = new Map<string, string | number>();
-            const groupNames = first.options.map(o => o.group);
+            );
+
+            const rowsWithOptions =
+                productRows.filter(
+                    row =>
+                        row.optionGroup &&
+                        row.optionValue,
+                );
+
+            const optionIds =
+                new Map<string, string | number>();
+
+            const groupNames = uniqueValues(
+                rowsWithOptions.map(
+                    row => row.optionGroup,
+                ),
+            );
+
             for (const groupName of groupNames) {
-                const candidates = await this.groups.findAll(ctx, { take: 1000 });
-                let group = candidates.items.find(g => match(g.name, groupName));
-                if (!group) group = await this.groups.create(ctx, {
-                    code: code(groupName),
-                    translations: [{ languageCode: ctx.languageCode ?? LanguageCode.en, name: groupName }],
-                });
-                await this.products.addOptionGroupToProduct(ctx, product.id, group.id);
-                const optionNames = [...new Set(productRows.map(r => r.options.find(o => match(o.group, groupName))!.value))];
-                for (const optionName of optionNames) {
-                    const list = await this.options.findAll(ctx, { take: 1000 }, group.id);
-                    let option = list.items.find(o => match(o.name, optionName));
-                    if (!option) option = await this.options.create(ctx, group.id, {
-                        code: code(optionName),
-                        translations: [{ languageCode: ctx.languageCode ?? LanguageCode.en, name: optionName }],
+                const group =
+                    await this.groups.create(ctx, {
+                        code: createCode(
+                            `${first.productSlug}-${groupName}`,
+                        ),
+                        translations: [
+                            {
+                                languageCode,
+                                name: groupName,
+                            },
+                        ],
                     });
+
+                await this.products.addOptionGroupToProduct(
+                    ctx,
+                    product.id,
+                    group.id,
+                );
+
+                const optionNames = uniqueValues(
+                    rowsWithOptions
+                        .filter(
+                            row =>
+                                normalize(row.optionGroup) ===
+                                normalize(groupName),
+                        )
+                        .map(row => row.optionValue),
+                );
+
+                for (const optionName of optionNames) {
+                    const option =
+                        await this.options.create(
+                            ctx,
+                            group.id,
+                            {
+                                code: createCode(optionName),
+                                translations: [
+                                    {
+                                        languageCode,
+                                        name: optionName,
+                                    },
+                                ],
+                            },
+                        );
+
                     optionIds.set(
-                        `${groupName.trim().toLowerCase()}|${optionName.trim().toLowerCase()}`,
+                        [
+                            normalize(groupName),
+                            normalize(optionName),
+                        ].join('|'),
                         option.id,
                     );
                 }
             }
-            await this.variants.create(ctx, productRows.map(r => ({
-                productId: product.id, enabled: true, sku: r.sku,
-                price: Math.round(r.price * 100), stockOnHand: r.stock,
-                optionIds: r.options.map(o =>
-                    optionIds.get(
-                        `${o.group.trim().toLowerCase()}|${o.value.trim().toLowerCase()}`,
-                    )!
-                ),
-                translations: [{
-                    languageCode: ctx.languageCode ?? LanguageCode.en,
-                    name: [r.productName, ...r.options.map(o => o.value)].join(' ')
-                }],
-            })));
+
+            await this.variants.create(
+                ctx,
+                productRows.map(row => {
+                    const variantOptionId =
+                        row.optionValue
+                            ? optionIds.get(
+                                [
+                                    normalize(
+                                        row.optionGroup,
+                                    ),
+                                    normalize(
+                                        row.optionValue,
+                                    ),
+                                ].join('|'),
+                            )
+                            : undefined;
+
+                    return {
+                        productId: product.id,
+                        enabled: true,
+                        sku: row.sku,
+                        price: Math.round(
+                            row.price * 100,
+                        ),
+                        stockOnHand: row.stock,
+                        optionIds:
+                            variantOptionId !== undefined
+                                ? [variantOptionId]
+                                : [],
+                        translations: [
+                            {
+                                languageCode,
+                                name:
+                                    row.variantName ||
+                                    row.productName,
+                            },
+                        ],
+                        customFields: {
+                            barcode:
+                                row.barcode || undefined,
+                            asin: row.asin || undefined,
+                            unit: row.unit || undefined,
+                            weightInGrams:
+                                row.weightInGrams ??
+                                undefined,
+                            packing:
+                                row.packing || undefined,
+                            hsnCode:
+                                row.hsnCode || undefined,
+                            gstPercentage:
+                                row.gstPercentage ??
+                                undefined,
+                            casePack:
+                                row.casePack ?? undefined,
+                            shelfLifeYears:
+                                row.shelfLifeYears ??
+                                undefined,
+                            packageLengthCm:
+                                row.packageLengthCm ??
+                                undefined,
+                            packageWidthCm:
+                                row.packageWidthCm ??
+                                undefined,
+                            packageHeightCm:
+                                row.packageHeightCm ??
+                                undefined,
+                        },
+                    };
+                }),
+            );
         }
+
         return result;
     }
 }
