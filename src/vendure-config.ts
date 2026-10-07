@@ -25,6 +25,7 @@ import { CloudinaryAssetStorageStrategy } from "./cloudinary/cloudinary-asset-st
 import { CmsPlugin } from "./plugins/cms/cms.plugin";
 import { razorpayPaymentHandler } from "./plugins/razorpay/razorpay-payment-handler";
 import { RazorpayPlugin } from "./plugins/razorpay/razorpay.plugin";
+import { json } from 'body-parser';
 const IS_DEV = process.env.APP_ENV === "dev";
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
 // must take precedence over any value baked into the .env file at scaffold time.
@@ -40,6 +41,14 @@ export const config: VendureConfig = {
     // The following options are useful in development mode,
     // but are best turned off for production for security
     // reasons.
+    middleware: [
+        {
+            handler: json({ limit: '10mb' }),
+            route: '/admin-api',
+            beforeListen: true,
+        },
+    ],
+
     ...(IS_DEV
       ? {
         adminApiDebug: true,

@@ -39,8 +39,25 @@ export class ProductImportService {
         }
         return { rows, result: { products: seen.size, variants: rows.length, issues } };
     }
-    async preview(ctx: RequestContext, raw: unknown): Promise<Result> {
-        return (await this.inspect(ctx, raw)).result;
+    async preview(
+        _ctx: RequestContext,
+        raw: unknown,
+    ): Promise<Result> {
+        const rows = this.parser.parseOPN(raw);
+        const issues =
+            this.validation.validateOPN(rows);
+
+        const products = new Set(
+            rows
+                .map(row => row.productGroupKey)
+                .filter(Boolean),
+        );
+
+        return {
+            products: products.size,
+            variants: rows.length,
+            issues,
+        };
     }
     async import(ctx: RequestContext, raw: unknown): Promise<Result> {
         const { rows, result } = await this.inspect(ctx, raw);

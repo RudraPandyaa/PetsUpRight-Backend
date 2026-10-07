@@ -136,39 +136,75 @@ export function ImportProductsPage() {
     }
 
     async function load(file?: File) {
-        if (!file) return;
+        if (!file) {
+            return;
+        }
 
         setRows([]);
         setPreview(undefined);
         setFileName('');
 
         try {
-            if (!/\.xlsx$/i.test(file.name) || file.size > 2_000_000) {
-                throw new Error('Choose an .xlsx file under 2 MB');
+            if (!/\.xlsx$/i.test(file.name)) {
+                throw new Error('Choose a valid .xlsx file');
             }
 
-            const book = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-            const sheet = book.Sheets[book.SheetNames[0]];
-            const values = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-                sheet,
-                { defval: '' },
+            if (file.size > 15_000_000) {
+                throw new Error('Choose an .xlsx file under 15 MB');
+            }
+
+            const book = XLSX.read(
+                await file.arrayBuffer(),
+                { type: 'array' },
             );
 
-            if (!values.length || values.length > 2000) {
-                throw new Error('The first sheet must contain 1–2000 variants');
+            const values = book.SheetNames.flatMap(sheetName => {
+                const sheet = book.Sheets[sheetName];
+
+                if (!sheet) {
+                    return [];
+                }
+
+                const sheetRows =
+                    XLSX.utils.sheet_to_json<
+                        Record<string, unknown>
+                    >(sheet, {
+                        defval: '',
+                        raw: false,
+                    });
+
+                return sheetRows.map((row, index) => ({
+                    ...row,
+                    __sheetName: sheetName,
+                    __rowNumber: index + 2,
+                }));
+            }).filter(row =>
+                Object.entries(row).some(
+                    ([key, value]) =>
+                        !key.startsWith('__') &&
+                        String(value ?? '').trim() !== '',
+                ),
+            );
+
+            if (!values.length) {
+                throw new Error(
+                    'The workbook contains no product rows',
+                );
             }
 
-            const columns = Object.keys(values[0]);
-
-            if (headers.some(header => !columns.includes(header))) {
-                throw new Error('Sheet columns do not match the template');
+            if (values.length > 10_000) {
+                throw new Error(
+                    'The workbook contains more than 10,000 rows',
+                );
             }
 
             setRows(values);
             setFileName(file.name);
         } catch (error) {
             toast.error(
-                error instanceof Error ? error.message : 'Invalid workbook',
+                error instanceof Error
+                    ? error.message
+                    : 'Invalid workbook',
             );
         }
     }
@@ -279,11 +315,17 @@ export function ImportProductsPage() {
                                     {preview.issues.length} errors
                                 </p>
 
-                                {preview.issues.map((issue, index) => (
-                                    <p key={index}>
+                                {preview.issues.slice(0, 100).map((issue, index) => (
+                                    <p key={`${issue.row}-${index}`}>
                                         Row {issue.row}: {issue.message}
                                     </p>
                                 ))}
+
+                                {preview.issues.length > 100 && (
+                                    <p>
+                                        Showing the first 100 of {preview.issues.length} errors.
+                                    </p>
+                                )}
 
                                 {!preview.issues.length && (
                                     <Button

@@ -1,11 +1,187 @@
 import { Injectable } from '@nestjs/common';
 import { ImportRow } from './spreadsheet-parser.service';
-
+import type { OPNImportRow } from './opn-import.types';
 export type ImportIssue = { row: number; message: string };
 const norm = (s: string) => s.trim().toLowerCase();
 
 @Injectable()
 export class ImportValidationService {
+    validateOPN(rows: OPNImportRow[]): ImportIssue[] {
+        const issues: ImportIssue[] = [];
+
+        const skus = new Map<string, OPNImportRow>();
+        const barcodes = new Map<string, OPNImportRow>();
+        const optionCombinations = new Set<string>();
+        const productDetails = new Map<string, string>();
+
+        const addIssue = (
+            row: OPNImportRow,
+            message: string,
+        ) => {
+            issues.push({
+                row: row.rowNumber,
+                message: `[${row.sheetName}] ${message}`,
+            });
+        };
+
+        for (const row of rows) {
+            if (!row.productName) {
+                addIssue(row, 'Product Name is required');
+            }
+
+            if (!row.productGroupKey) {
+                addIssue(
+                    row,
+                    'A product grouping key could not be generated',
+                );
+            }
+
+            if (!row.brand) {
+                addIssue(row, 'Brand is required');
+            }
+
+            if (!row.sku) {
+                addIssue(
+                    row,
+                    'Item Code / SKU is required',
+                );
+            }
+
+            if (
+                !Number.isFinite(row.price) ||
+                row.price <= 0
+            ) {
+                addIssue(
+                    row,
+                    'MRP must be greater than zero',
+                );
+            }
+
+            if (!row.petTypes.length) {
+                addIssue(row, 'Pet Type is required');
+            }
+
+            if (
+                row.gstPercentage !== null &&
+                (
+                    row.gstPercentage < 0 ||
+                    row.gstPercentage > 100
+                )
+            ) {
+                addIssue(
+                    row,
+                    'GST Percentage must be between 0 and 100',
+                );
+            }
+
+            const measurements = [
+                ['Package length', row.packageLengthCm],
+                ['Package width', row.packageWidthCm],
+                ['Package height', row.packageHeightCm],
+                ['Weight in grams', row.weightInGrams],
+                ['Case Pack', row.casePack],
+                ['Shelf Life', row.shelfLifeYears],
+            ] as const;
+
+            for (const [label, value] of measurements) {
+                if (value !== null && value < 0) {
+                    addIssue(
+                        row,
+                        `${label} cannot be negative`,
+                    );
+                }
+            }
+
+            const normalizedSku = norm(row.sku);
+
+            if (normalizedSku) {
+                const existingSku = skus.get(normalizedSku);
+
+                if (existingSku) {
+                    addIssue(
+                        row,
+                        `Duplicate SKU ${row.sku}; first found in ` +
+                        `${existingSku.sheetName} row ` +
+                        `${existingSku.rowNumber}`,
+                    );
+                } else {
+                    skus.set(normalizedSku, row);
+                }
+            }
+
+            const normalizedBarcode = norm(row.barcode);
+
+            if (normalizedBarcode) {
+                const existingBarcode =
+                    barcodes.get(normalizedBarcode);
+
+                if (existingBarcode) {
+                    addIssue(
+                        row,
+                        `Duplicate barcode ${row.barcode}; ` +
+                        `first found in ` +
+                        `${existingBarcode.sheetName} row ` +
+                        `${existingBarcode.rowNumber}`,
+                    );
+                } else {
+                    barcodes.set(normalizedBarcode, row);
+                }
+            }
+
+            if (row.optionValue) {
+                const combination = [
+                    row.productGroupKey,
+                    norm(row.optionGroup),
+                    norm(row.optionValue),
+                ].join('|');
+
+                if (optionCombinations.has(combination)) {
+                    addIssue(
+                        row,
+                        `Duplicate ${row.optionGroup} option ` +
+                        `${row.optionValue} for the same product`,
+                    );
+                } else {
+                    optionCombinations.add(combination);
+                }
+            }
+
+            const productSignature = JSON.stringify({
+                brand: norm(row.brand),
+                description: norm(row.description),
+                petTypes: [...row.petTypes]
+                    .map(norm)
+                    .sort(),
+                primaryCategory:
+                    norm(row.primaryCategory),
+                secondaryCategory:
+                    norm(row.secondaryCategory),
+                tertiaryCategory:
+                    norm(row.tertiaryCategory),
+            });
+
+            const previousSignature =
+                productDetails.get(row.productGroupKey);
+
+            if (
+                previousSignature &&
+                previousSignature !== productSignature
+            ) {
+                addIssue(
+                    row,
+                    'Product-level details differ between ' +
+                    'variants grouped into the same product',
+                );
+            } else {
+                productDetails.set(
+                    row.productGroupKey,
+                    productSignature,
+                );
+            }
+        }
+
+        return issues;
+    }
     validate(rows: ImportRow[]): ImportIssue[] {
         const issues: ImportIssue[] = [];
         const skus = new Set<string>();

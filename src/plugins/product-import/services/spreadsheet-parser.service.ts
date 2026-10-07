@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-
+import type { OPNImportRow } from './opn-import.types';
+import { parseOPNRows } from './opn-row-parser';
 export type ImportRow = {
     rowNumber: number;
     productSlug: string;
@@ -24,6 +25,9 @@ export type ImportRow = {
 
 @Injectable()
 export class SpreadsheetParserService {
+    parseOPN(data: unknown): OPNImportRow[] {
+        return parseOPNRows(data);
+    }
     parse(data: unknown): ImportRow[] {
         if (!Array.isArray(data) || data.length === 0 || data.length > 2000) {
             throw new Error('Upload 1–2000 variant rows');
