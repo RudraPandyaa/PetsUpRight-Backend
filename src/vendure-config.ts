@@ -413,7 +413,11 @@ export const config: VendureConfig = {
       },
     }),
     CmsPlugin.init({}),
-    ProductImportPlugin,
+    ProductImportPlugin.init({
+      // Optional; default 3 each. See src/plugins/product-import/constants.ts
+      productConcurrency: Number(process.env.IMPORT_PRODUCT_CONCURRENCY) || undefined,
+      imageConcurrency: Number(process.env.IMPORT_IMAGE_CONCURRENCY) || undefined,
+    }),
     RazorpayPlugin,
     ProductReviewPlugin,
     DashboardPlugin.init({

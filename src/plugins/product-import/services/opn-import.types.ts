@@ -75,4 +75,6 @@ export type OPNImportRow = {
     packageHeightCm: number | null;
 
     imageUrl: string;
+    // Every image link in the row (all image columns), in column order
+    imageCells: OPNSourceCell[];
 };

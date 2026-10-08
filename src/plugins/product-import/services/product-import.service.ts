@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
     ID,
     LanguageCode,
@@ -9,7 +9,10 @@ import {
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
-import { OpnAssetService } from './opn-asset.service';
+import {
+    ImageImportCache,
+    OpnAssetService,
+} from './opn-asset.service';
 import { OpnTaxonomyService } from './opn-taxonomy.service';
 import {
     ImportIssue,
@@ -17,10 +20,20 @@ import {
     rowKey,
     sourceCells,
 } from './import-validation.service';
-import type { OPNImportRow } from './opn-import.types';
+import type {
+    OPNImportRow,
+    OPNSourceCell,
+} from './opn-import.types';
 import { SpreadsheetParserService } from './spreadsheet-parser.service';
 import { ImportProfiler } from './import-profiler';
-import { forEachWithConcurrency } from './async-pool';
+import {
+    createTaskQueue,
+    forEachWithConcurrency,
+} from './async-pool';
+import {
+    PRODUCT_IMPORT_OPTIONS,
+    ProductImportOptions,
+} from '../constants';
 import {
     CreatedProductLog,
     writeImportLog,
@@ -86,6 +99,8 @@ export class ProductImportService {
         private readonly variants: ProductVariantService,
         private readonly groups: ProductOptionGroupService,
         private readonly options: ProductOptionService,
+        @Inject(PRODUCT_IMPORT_OPTIONS)
+        private readonly importOptions: Required<ProductImportOptions>,
     ) {}
 
     /**
@@ -253,7 +268,10 @@ export class ProductImportService {
         const issues: ImportIssue[] = [];
         const created: CreatedProductLog[] = [];
         const affectedCollectionIds = new Set<ID>();
-        const imageUploads = new Set<Promise<void>>();
+        const imageQueue = createTaskQueue(
+            this.importOptions.imageConcurrency,
+        );
+        const imageCache: ImageImportCache = new Map();
 
         let rowsRead = 0;
         let fatalError: string | undefined;
@@ -292,15 +310,14 @@ export class ProductImportService {
             const languageCode =
                 ctx.languageCode ?? LanguageCode.en;
 
-            this.taxonomy.resetCache();
-
-            for (const [groupKey, productRows] of batches) {
+            const productIssue = (
+                productRows: OPNImportRow[],
+                kind: 'product-skipped' | 'product-failed',
+                problem: string,
+            ): ImportIssue => {
                 const first = productRows[0];
 
-                const productIssue = (
-                    kind: 'product-skipped' | 'product-failed',
-                    problem: string,
-                ): ImportIssue => ({
+                return {
                     row: first.rowNumber,
                     message:
                         `[${first.sheetName}] ${first.productName}: ` +
@@ -311,93 +328,153 @@ export class ProductImportService {
                     productName: first.productName,
                     cells: sourceCells(first, ['productName']),
                     problem,
-                });
+                };
+            };
 
+            const errorText = (error: unknown): string =>
+                error instanceof Error
+                    ? error.message
+                    : 'unknown error';
+
+            const toCreate: OPNImportRow[][] = [];
+
+            for (const [groupKey, productRows] of batches) {
                 const skipReason =
                     existingProducts.get(groupKey);
 
                 if (skipReason) {
                     issues.push(
                         productIssue(
+                            productRows,
                             'product-skipped',
                             `Already exists: ${skipReason}`,
                         ),
                     );
-
-                    continue;
-                }
-
-                // Each product is committed on its own, so products that
-                // were saved stay saved if a later one fails.
-                let product: {
-                    productId: ID;
-                    collectionIds: ID[];
-                };
-
-                try {
-                    product =
-                        await this.connection.withTransaction(
-                            ctx,
-                            transactionCtx =>
-                                this.createProduct(
-                                    transactionCtx,
-                                    productRows,
-                                    languageCode,
-                                ),
-                        );
-                } catch (error) {
-                    // Facet values and collections created in the rolled
-                    // back transaction are gone, so drop their cached IDs.
-                    this.taxonomy.resetCache();
-
-                    issues.push(
-                        productIssue(
-                            'product-failed',
-                            'Could not be saved: ' +
-                                (error instanceof Error
-                                    ? error.message
-                                    : 'unknown error'),
-                        ),
-                    );
-
-                    continue;
-                }
-
-                created.push({
-                    productId: product.productId,
-                    productName: first.productName,
-                    sheetName: first.sheetName,
-                    rows: productRows.map(row => row.rowNumber),
-                    variants: productRows.length,
-                });
-
-                for (const collectionId of product.collectionIds) {
-                    affectedCollectionIds.add(collectionId);
-                }
-
-                const imageRow = productRows.find(row =>
-                    Boolean(row.imageUrl.trim()),
-                );
-
-                if (imageRow) {
-                    // Up to 3 images upload in the background while the
-                    // next products are created.
-                    while (imageUploads.size >= 3) {
-                        await Promise.race(imageUploads);
-                    }
-
-                    const upload = this.importProductImage(
-                        ctx,
-                        product.productId,
-                        imageRow,
-                        issues,
-                    ).finally(() => {
-                        imageUploads.delete(upload);
-                    });
-
-                    imageUploads.add(upload);
+                } else {
+                    toCreate.push(productRows);
                 }
             }
+
+            // Filters (facet values) and collections are shared between
+            // products, so they are all created first, one product at a
+            // time and committed straight away. The products can then be
+            // created in parallel without two of them creating the same
+            // filter or collection.
+            this.taxonomy.resetCache();
+
+            const ready: OPNImportRow[][] = [];
+
+            for (const productRows of toCreate) {
+                try {
+                    await this.taxonomy.prepareProduct(
+                        ctx,
+                        productRows,
+                    );
+                    ready.push(productRows);
+                } catch (error) {
+                    this.taxonomy.resetCache();
+                    issues.push(
+                        productIssue(
+                            productRows,
+                            'product-failed',
+                            'Filters or collections could not be ' +
+                                `created: ${errorText(error)}`,
+                        ),
+                    );
+                }
+            }
+
+            profiler.mark('filters and collections prepared', {
+                products: ready.length,
+            });
+
+            await forEachWithConcurrency(
+                ready,
+                this.importOptions.productConcurrency,
+                async productRows => {
+                    const first = productRows[0];
+
+                    // Each product is committed on its own, so products
+                    // that were saved stay saved if another one fails.
+                    let product: {
+                        productId: ID;
+                        collectionIds: ID[];
+                    };
+
+                    try {
+                        product =
+                            await this.connection.withTransaction(
+                                ctx,
+                                transactionCtx =>
+                                    this.createProduct(
+                                        transactionCtx,
+                                        productRows,
+                                        languageCode,
+                                    ),
+                            );
+                    } catch (error) {
+                        issues.push(
+                            productIssue(
+                                productRows,
+                                'product-failed',
+                                `Could not be saved: ${errorText(error)}`,
+                            ),
+                        );
+
+                        return;
+                    }
+
+                    created.push({
+                        productId: product.productId,
+                        productName: first.productName,
+                        sheetName: first.sheetName,
+                        rows: productRows.map(row => row.rowNumber),
+                        variants: productRows.length,
+                    });
+
+                    for (const collectionId of product.collectionIds) {
+                        affectedCollectionIds.add(collectionId);
+                    }
+
+                    // Every image link of every row of the product, once
+                    const imageLinks = new Map<
+                        string,
+                        { row: OPNImportRow; cell: OPNSourceCell }
+                    >();
+
+                    for (const row of productRows) {
+                        for (const cell of row.imageCells) {
+                            if (!imageLinks.has(cell.value)) {
+                                imageLinks.set(cell.value, {
+                                    row,
+                                    cell,
+                                });
+                            }
+                        }
+                    }
+
+                    if (imageLinks.size) {
+                        // Queued, not awaited: images download in the
+                        // background while more products are created.
+                        imageQueue.add(() =>
+                            this.importProductImages(
+                                ctx,
+                                product.productId,
+                                first.productSlug,
+                                [...imageLinks.values()],
+                                imageCache,
+                                issues,
+                            ),
+                        );
+                    }
+                },
+            );
+
+            profiler.mark('products created', {
+                created: created.length,
+                productConcurrency:
+                    this.importOptions.productConcurrency,
+            });
         } catch (error) {
             // Reported instead of thrown so the products already saved and
             // the log file are still shown in the dashboard.
@@ -411,7 +488,7 @@ export class ProductImportService {
                 message: `Import stopped early: ${fatalError}`,
             });
         } finally {
-            await Promise.allSettled(imageUploads);
+            await imageQueue.drain();
 
             await this.taxonomy
                 .refreshCollections(
@@ -450,51 +527,95 @@ export class ProductImportService {
         };
     }
 
-    private async importProductImage(
+    /**
+     * Imports all images of a product from its image links and attaches
+     * them, the first one as the featured image. Every image that fails is
+     * reported with the sheet, row, column and link it came from.
+     */
+    private async importProductImages(
         ctx: RequestContext,
         productId: ID,
-        row: OPNImportRow,
+        productSlug: string,
+        links: Array<{ row: OPNImportRow; cell: OPNSourceCell }>,
+        cache: ImageImportCache,
         issues: ImportIssue[],
     ): Promise<void> {
-        const reportFailure = (reason: string) => {
+        const reportFailure = (
+            row: OPNImportRow,
+            cell: OPNSourceCell,
+            reason: string,
+        ) => {
             issues.push({
                 row: row.rowNumber,
                 message:
                     `[${row.sheetName}] Product was ` +
-                    `imported, but its image failed: ${reason}`,
+                    `imported, but an image failed: ${reason}`,
                 kind: 'image-failed',
                 sheetName: row.sheetName,
                 rows: [row.rowNumber],
                 productName: row.productName,
-                cells: sourceCells(row, ['imageUrl']),
+                cells: [cell],
                 problem: reason,
             });
         };
 
-        try {
-            const imported =
-                await this.assetImporter.importImage(
-                    ctx,
-                    row.imageUrl,
-                    row.productSlug,
+        const assetIds: ID[] = [];
+
+        for (const { row, cell } of links) {
+            try {
+                const imported =
+                    await this.assetImporter.importImagesFromLink(
+                        ctx,
+                        cell.value,
+                        productSlug,
+                        cache,
+                    );
+
+                for (const assetId of imported.assetIds) {
+                    if (!assetIds.includes(assetId)) {
+                        assetIds.push(assetId);
+                    }
+                }
+
+                for (const failure of imported.errors) {
+                    reportFailure(
+                        row,
+                        cell,
+                        failure.file
+                            ? `${failure.file}: ${failure.error}`
+                            : failure.error,
+                    );
+                }
+            } catch (error) {
+                reportFailure(
+                    row,
+                    cell,
+                    error instanceof Error
+                        ? error.message
+                        : 'unknown error',
                 );
-
-            if (imported.assetId !== undefined) {
-                await this.products.update(ctx, {
-                    id: productId,
-                    assetIds: [imported.assetId],
-                    featuredAssetId: imported.assetId,
-                });
             }
+        }
 
-            if (imported.error) {
-                reportFailure(imported.error);
-            }
+        if (!assetIds.length) {
+            return;
+        }
+
+        try {
+            await this.products.update(ctx, {
+                id: productId,
+                assetIds,
+                featuredAssetId: assetIds[0],
+            });
         } catch (error) {
             reportFailure(
-                error instanceof Error
-                    ? error.message
-                    : 'unknown error',
+                links[0].row,
+                links[0].cell,
+                'Images were uploaded but could not be attached ' +
+                    'to the product: ' +
+                    (error instanceof Error
+                        ? error.message
+                        : 'unknown error'),
             );
         }
     }

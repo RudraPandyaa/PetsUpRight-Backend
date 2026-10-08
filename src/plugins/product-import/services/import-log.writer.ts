@@ -189,7 +189,14 @@ function render(log: ImportLog): string {
             ...heading(`Products created (${log.created.length})`),
         );
 
-        for (const product of log.created) {
+        // Products are created in parallel, so sort them back into sheet order
+        const created = [...log.created].sort(
+            (a, b) =>
+                a.sheetName.localeCompare(b.sheetName) ||
+                a.rows[0] - b.rows[0],
+        );
+
+        for (const product of created) {
             lines.push(
                 `[${product.sheetName}] row ` +
                     `${formatRows(product.rows)}: ` +

@@ -147,6 +147,37 @@ function createSource(
     return source;
 }
 
+/**
+ * Every http(s) link in an image column of the row, e.g. "Images",
+ * "Images2", "Product Picture 1 (URL)". Cells such as "NA" are ignored.
+ */
+function getImageCells(
+    headerMap: Map<string, HeaderCell>,
+): OPNSourceCell[] {
+    const cells: OPNSourceCell[] = [];
+    const seen = new Set<string>();
+
+    for (const [header, cell] of headerMap) {
+        if (!/image|picture/.test(header)) {
+            continue;
+        }
+
+        const value = normalizeText(cell.value);
+
+        if (!/^https?:\/\//i.test(value) || seen.has(value)) {
+            continue;
+        }
+
+        seen.add(value);
+        cells.push({
+            column: cell.header,
+            value,
+        });
+    }
+
+    return cells;
+}
+
 function integerOrNull(
     value: unknown,
 ): number | null {
@@ -551,6 +582,7 @@ export function parseOPNRows(
             imageUrl: normalizeText(
                 getValue(headers, 'imageUrl'),
             ),
+            imageCells: getImageCells(headers),
         };
     });
     const meaningfulRows = rows.filter(row => {
