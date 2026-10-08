@@ -60,6 +60,18 @@ export class OpnTaxonomyService {
         private readonly collections: CollectionService,
     ) {}
 
+    /**
+     * Forgets cached facet, facet value and collection IDs. Call it before an
+     * import and after a product's transaction rolls back, because the cache
+     * may then hold IDs of rows that were never committed.
+     */
+    resetCache(): void {
+        this.facetCache.clear();
+        this.facetValueCache.clear();
+        this.loadedFacetValues.clear();
+        this.collectionCache.clear();
+    }
+
     private language(ctx: RequestContext): LanguageCode {
         return ctx.languageCode ?? LanguageCode.en;
     }

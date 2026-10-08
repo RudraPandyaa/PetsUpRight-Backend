@@ -10,3 +10,5 @@ static/email/test-emails
 
 backups/
 *.backup
+# Product import logs (runtime data)
+import-logs/

@@ -19,11 +19,12 @@ const previewQuery = graphql(`query PreviewProductSheet($rows: JSON!) {
     }
 }`);
 
-const importMutation = graphql(`mutation ImportProductSheet($rows: JSON!) {
-    importProductsFromSheet(rows: $rows) {
+const importMutation = graphql(`mutation ImportProductSheet($rows: JSON!, $fileName: String) {
+    importProductsFromSheet(rows: $rows, fileName: $fileName) {
         products
         variants
         issues { row message }
+        logFile
     }
 }`);
 
@@ -31,6 +32,7 @@ type Result = {
     products: number;
     variants: number;
     issues: { row: number; message: string }[];
+    logFile?: string | null;
 };
 
 type WorkbookRow = Record<string, unknown>;
@@ -166,9 +168,26 @@ const headers = [
     ]).flat(),
 ];
 
+function IssueList({ issues }: { issues: Result['issues'] }) {
+    return (
+        <>
+            {issues.slice(0, 100).map((issue, index) => (
+                <p key={`${issue.row}-${index}`}>
+                    Row {issue.row}: {issue.message}
+                </p>
+            ))}
+
+            {issues.length > 100 && (
+                <p>Showing the first 100 of {issues.length} issues.</p>
+            )}
+        </>
+    );
+}
+
 export function ImportProductsPage() {
     const [rows, setRows] = useState<Record<string, unknown>[]>([]);
     const [preview, setPreview] = useState<Result>();
+    const [imported, setImported] = useState<Result>();
     const [busy, setBusy] = useState(false);
     const [fileName, setFileName] = useState('');
 
@@ -257,6 +276,7 @@ export function ImportProductsPage() {
 
         setRows([]);
         setPreview(undefined);
+        setImported(undefined);
         setFileName('');
 
         try {
@@ -353,19 +373,24 @@ export function ImportProductsPage() {
         setBusy(true);
 
         try {
-            const response = await api.mutate(importMutation, { rows });
+            const response = await api.mutate(importMutation, {
+                rows,
+                fileName,
+            });
             const result = response.importProductsFromSheet;
 
-            if (result.issues.length) {
-                setPreview(result);
-            } else {
-                toast.success(
-                    `Created ${result.products} products and ${result.variants} variants`,
-                );
-                setRows([]);
-                setPreview(undefined);
-                setFileName('');
-            }
+            // Products are saved one at a time and rows with problems are
+            // skipped, so show what was created and what was not.
+            toast.success(
+                `Created ${result.products} products and ${result.variants} variants` +
+                (result.issues.length
+                    ? ` (${result.issues.length} issues, see below)`
+                    : ''),
+            );
+
+            setImported(result);
+            setPreview(undefined);
+            setRows([]);
         } catch (error) {
             toast.error(
                 error instanceof Error ? error.message : 'Import failed',
@@ -387,8 +412,10 @@ export function ImportProductsPage() {
                 >
                     <div className="space-y-4">
                         <p>
-                            One row per variant. Prices are in rupees. Existing
-                            SKUs and product slugs are rejected.
+                            One row per variant. Prices are in rupees. Products
+                            are saved one by one. Rows with problems and
+                            products whose slug or SKU already exists are
+                            skipped, and a log file lists every skipped row.
                         </p>
 
                         <div className="flex flex-wrap items-center gap-3">
@@ -435,32 +462,54 @@ export function ImportProductsPage() {
                         {preview && (
                             <div className="space-y-2">
                                 <p>
-                                    {preview.products} products,{' '}
-                                    {preview.variants} variants,{' '}
-                                    {preview.issues.length} errors
+                                    {preview.products} products and{' '}
+                                    {preview.variants} variants can be
+                                    imported. {preview.issues.length} rows
+                                    have problems and will be skipped.
                                 </p>
 
-                                {preview.issues.slice(0, 100).map((issue, index) => (
-                                    <p key={`${issue.row}-${index}`}>
-                                        Row {issue.row}: {issue.message}
-                                    </p>
-                                ))}
+                                <IssueList issues={preview.issues} />
 
-                                {preview.issues.length > 100 && (
-                                    <p>
-                                        Showing the first 100 of {preview.issues.length} errors.
-                                    </p>
-                                )}
-
-                                {!preview.issues.length && (
+                                {preview.variants > 0 && (
                                     <Button
                                         type="button"
                                         disabled={busy}
                                         onClick={run}
                                     >
-                                        Import products
+                                        {preview.issues.length
+                                            ? 'Import products and skip rows with problems'
+                                            : 'Import products'}
                                     </Button>
                                 )}
+
+                                {busy && (
+                                    <p aria-live="polite">
+                                        Working… products are saved one by
+                                        one, so you can follow progress in
+                                        the product list.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {imported && (
+                            <div className="space-y-2">
+                                <p>
+                                    Created {imported.products} products
+                                    and {imported.variants} variants.{' '}
+                                    {imported.issues.length} issues.
+                                </p>
+
+                                {imported.logFile && (
+                                    <p>
+                                        Full details (sheet, row, column,
+                                        value) are in{' '}
+                                        <code>{imported.logFile}</code> in
+                                        the backend folder.
+                                    </p>
+                                )}
+
+                                <IssueList issues={imported.issues} />
                             </div>
                         )}
                     </div>

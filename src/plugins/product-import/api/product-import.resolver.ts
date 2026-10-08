@@ -1,5 +1,5 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, Permission, RequestContext, Transaction } from '@vendure/core';
+import { Allow, Ctx, Permission, RequestContext } from '@vendure/core';
 import { ProductImportService } from '../services/product-import.service';
 
 @Resolver()
@@ -12,8 +12,13 @@ export class ProductImportResolver {
     }
     @Mutation()
     @Allow(Permission.CreateCatalog, Permission.UpdateCatalog)
-    @Transaction()
-    importProductsFromSheet(@Ctx() ctx: RequestContext, @Args('rows') rows: unknown) {
-        return this.imports.import(ctx, rows);
+    // No @Transaction(): the service commits each product in its own
+    // transaction so finished products are saved as the import runs.
+    importProductsFromSheet(
+        @Ctx() ctx: RequestContext,
+        @Args('rows') rows: unknown,
+        @Args('fileName', { nullable: true }) fileName?: string,
+    ) {
+        return this.imports.import(ctx, rows, fileName ?? undefined);
     }
 }

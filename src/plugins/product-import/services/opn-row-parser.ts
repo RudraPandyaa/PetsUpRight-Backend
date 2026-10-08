@@ -2,7 +2,10 @@ import {
     OPN_COLUMN_ALIASES,
     type OPNColumnKey,
 } from './opn-column-map';
-import type { OPNImportRow } from './opn-import.types';
+import type {
+    OPNImportRow,
+    OPNSourceCell,
+} from './opn-import.types';
 import {
     createProductIdentity,
     createVariantOption,
@@ -23,34 +26,43 @@ function normalizeHeader(value: string): string {
         .replace(/[^a-z0-9]+/g, '');
 }
 
+type HeaderCell = {
+    // Header exactly as written in the workbook
+    header: string;
+    value: unknown;
+};
+
 function createHeaderMap(
     row: RawRow,
-): Map<string, unknown> {
-    const map = new Map<string, unknown>();
+): Map<string, HeaderCell> {
+    const map = new Map<string, HeaderCell>();
 
     for (const [key, value] of Object.entries(row)) {
-        map.set(normalizeHeader(key), value);
+        map.set(normalizeHeader(key), {
+            header: key,
+            value,
+        });
     }
 
     return map;
 }
 
-function getValue(
-    headerMap: Map<string, unknown>,
+function findCell(
+    headerMap: Map<string, HeaderCell>,
     key: OPNColumnKey,
-): unknown {
+): HeaderCell | undefined {
     for (const alias of OPN_COLUMN_ALIASES[key]) {
         const normalizedAlias =
             normalizeHeader(alias);
 
-        const exactValue =
+        const exactCell =
             headerMap.get(normalizedAlias);
 
-        if (normalizeText(exactValue)) {
-            return exactValue;
+        if (normalizeText(exactCell?.value)) {
+            return exactCell;
         }
 
-        for (const [header, value] of headerMap) {
+        for (const [header, cell] of headerMap) {
             const isDuplicateHeader =
                 header === normalizedAlias ||
                 (
@@ -64,14 +76,75 @@ function getValue(
 
             if (
                 isDuplicateHeader &&
-                normalizeText(value)
+                normalizeText(cell.value)
             ) {
-                return value;
+                return cell;
             }
         }
     }
 
-    return '';
+    return undefined;
+}
+
+function getValue(
+    headerMap: Map<string, HeaderCell>,
+    key: OPNColumnKey,
+): unknown {
+    return findCell(headerMap, key)?.value ?? '';
+}
+
+// Product name columns other than "Product Description"
+const DEDICATED_NAME_HEADERS = OPN_COLUMN_ALIASES.productName
+    .map(normalizeHeader)
+    .filter(header => header !== normalizeHeader('Product Description'));
+
+/**
+ * "Product Description" is only used as the product name in sheets that
+ * have no dedicated name column. Otherwise an empty name cell would turn
+ * the description into the name of a new product.
+ */
+function getProductNameCell(
+    headerMap: Map<string, HeaderCell>,
+): HeaderCell | undefined {
+    const dedicated = [...headerMap.entries()].filter(
+        ([header]) => DEDICATED_NAME_HEADERS.includes(header),
+    );
+
+    if (!dedicated.length) {
+        return findCell(headerMap, 'productName');
+    }
+
+    return (
+        dedicated.find(([, cell]) =>
+            normalizeText(cell.value),
+        ) ?? dedicated[0]
+    )[1];
+}
+
+function createSource(
+    headerMap: Map<string, HeaderCell>,
+): Partial<Record<OPNColumnKey, OPNSourceCell>> {
+    const source: Partial<
+        Record<OPNColumnKey, OPNSourceCell>
+    > = {};
+
+    for (const key of Object.keys(
+        OPN_COLUMN_ALIASES,
+    ) as OPNColumnKey[]) {
+        const cell =
+            key === 'productName'
+                ? getProductNameCell(headerMap)
+                : findCell(headerMap, key);
+
+        if (cell) {
+            source[key] = {
+                column: cell.header,
+                value: normalizeText(cell.value),
+            };
+        }
+    }
+
+    return source;
 }
 
 function integerOrNull(
@@ -238,6 +311,7 @@ function createRowSignature(
     const {
         sheetName: _sheetName,
         rowNumber: _rowNumber,
+        source: _source,
         ...content
     } = row;
 
@@ -267,7 +341,7 @@ export function parseOPNRows(
         const rowNumber = getRowNumber(rawRow, index);
 
         const originalProductName = normalizeText(
-            getValue(headers, 'productName'),
+            getProductNameCell(headers)?.value,
         );
 
         const brand =
@@ -306,7 +380,7 @@ export function parseOPNRows(
 
         const duplicateDescription = headers.get(
             `${normalizeHeader('Product Description')}1`,
-        );
+        )?.value;
 
         const description =
             normalizeText(duplicateDescription) ||
@@ -361,6 +435,7 @@ export function parseOPNRows(
         return {
             sheetName,
             rowNumber,
+            source: createSource(headers),
 
             productGroupKey:
                 identity.productGroupKey,

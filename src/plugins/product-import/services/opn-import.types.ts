@@ -1,6 +1,17 @@
+import type { OPNColumnKey } from './opn-column-map';
+
+/** A cell as it appeared in the uploaded workbook. */
+export type OPNSourceCell = {
+    column: string;
+    value: string;
+};
+
 export type OPNImportRow = {
     sheetName: string;
     rowNumber: number;
+
+    // Original column header and cell text for each field, for import logs.
+    source: Partial<Record<OPNColumnKey, OPNSourceCell>>;
 
     // Product grouping
     productGroupKey: string;
