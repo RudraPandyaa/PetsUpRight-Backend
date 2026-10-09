@@ -1,5 +1,3 @@
-import type { OPNImportRow } from './opn-import.types';
-
 export const OPN_FACETS = {
     brand: {
         code: 'brand',
@@ -56,58 +54,3 @@ export const DIET_TYPE_ALIASES: Record<string, string> = {
     nonveg: 'Non Veg',
     vegan: 'Vegan',
 };
-
-export type CollectionPath = {
-    petType: string;
-    primary: string;
-    secondary: string;
-    tertiary: string;
-};
-
-export function getCollectionPaths(
-    row: OPNImportRow,
-): CollectionPath[] {
-    return row.petTypes.map(petType => ({
-        petType,
-        primary: row.primaryCategory,
-        secondary: row.secondaryCategory,
-        tertiary: row.tertiaryCategory,
-    }));
-}
-
-export function getCollectionCodes(path: CollectionPath): string[] {
-    const slug = (value: string) =>
-        value
-            .trim()
-            .toLowerCase()
-            .replace(/&/g, 'and')
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-
-    const pet = slug(path.petType);
-    const primary = slug(path.primary);
-    const secondary = slug(path.secondary);
-    const tertiary = slug(path.tertiary);
-
-    const codes: string[] = [];
-
-    if (pet) {
-        codes.push(pet);
-    }
-
-    if (pet && primary) {
-        codes.push(`${pet}-${primary}`);
-    }
-
-    if (pet && primary && secondary) {
-        codes.push(`${pet}-${primary}-${secondary}`);
-    }
-
-    if (pet && primary && secondary && tertiary) {
-        codes.push(
-            `${pet}-${primary}-${secondary}-${tertiary}`,
-        );
-    }
-
-    return codes;
-}   

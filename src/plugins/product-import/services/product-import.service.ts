@@ -14,6 +14,7 @@ import {
     OpnAssetService,
 } from './opn-asset.service';
 import { OpnTaxonomyService } from './opn-taxonomy.service';
+import { mapPets } from './opn-category-map';
 import {
     ImportIssue,
     ImportValidationService,
@@ -142,9 +143,12 @@ export class ProductImportService {
     private async findExistingProducts(
         ctx: RequestContext,
         rows: OPNImportRow[],
-    ): Promise<Map<string, string>> {
-        // productGroupKey -> reason the product is skipped
-        const existingProducts = new Map<string, string>();
+    ): Promise<Map<string, { productId: ID; reason: string }>> {
+        // productGroupKey -> the existing product and how it was found
+        const existingProducts = new Map<
+            string,
+            { productId: ID; reason: string }
+        >();
 
         const groupKeyBySlug = new Map<string, string>();
 
@@ -171,10 +175,10 @@ export class ProductImportService {
                     );
 
                 if (existingProduct) {
-                    existingProducts.set(
-                        groupKey,
-                        `product slug ${slug} already exists`,
-                    );
+                    existingProducts.set(groupKey, {
+                        productId: existingProduct.id,
+                        reason: `product slug ${slug} already exists`,
+                    });
                 }
             },
         );
@@ -198,10 +202,10 @@ export class ProductImportService {
                     });
 
                 if (existingVariant.totalItems > 0) {
-                    existingProducts.set(
-                        row.productGroupKey,
-                        `SKU ${row.sku} already exists`,
-                    );
+                    existingProducts.set(row.productGroupKey, {
+                        productId: existingVariant.items[0].productId,
+                        reason: `SKU ${row.sku} already exists`,
+                    });
                 }
             },
         );
@@ -337,19 +341,17 @@ export class ProductImportService {
                     : 'unknown error';
 
             const toCreate: OPNImportRow[][] = [];
+            const toUpdate: Array<{
+                productId: ID;
+                reason: string;
+                rows: OPNImportRow[];
+            }> = [];
 
             for (const [groupKey, productRows] of batches) {
-                const skipReason =
-                    existingProducts.get(groupKey);
+                const existing = existingProducts.get(groupKey);
 
-                if (skipReason) {
-                    issues.push(
-                        productIssue(
-                            productRows,
-                            'product-skipped',
-                            `Already exists: ${skipReason}`,
-                        ),
-                    );
+                if (existing) {
+                    toUpdate.push({ ...existing, rows: productRows });
                 } else {
                     toCreate.push(productRows);
                 }
@@ -365,6 +367,59 @@ export class ProductImportService {
             // Collections are refreshed once at the end instead of after
             // every product (resumed in the finally block below)
             this.taxonomy.pauseCollectionUpdates();
+
+            // The client's whole category structure, so categories without
+            // products (yet) exist on the storefront too
+            for (const id of await this.taxonomy.ensureClientCategoryTree(
+                ctx,
+            )) {
+                affectedCollectionIds.add(id);
+            }
+
+            // Products that already exist are not changed, except for their
+            // categories and filters, so importing a sheet again re-maps
+            // them to the current category structure
+            for (const { productId, reason, rows: productRows } of toUpdate) {
+                try {
+                    const taxonomy = await this.taxonomy.prepareProduct(
+                        ctx,
+                        productRows,
+                    );
+
+                    await this.products.update(ctx, {
+                        id: productId,
+                        facetValueIds: taxonomy.facetValueIds,
+                        customFields: {
+                            petType:
+                                uniqueValues(
+                                    productRows.flatMap(row => mapPets(row)),
+                                ).join(', ') || undefined,
+                        },
+                    });
+
+                    for (const collectionId of taxonomy.collectionIds) {
+                        affectedCollectionIds.add(collectionId);
+                    }
+
+                    issues.push(
+                        productIssue(
+                            productRows,
+                            'product-skipped',
+                            `Already exists (${reason}); only its ` +
+                                'categories and filters were updated',
+                        ),
+                    );
+                } catch (error) {
+                    issues.push(
+                        productIssue(
+                            productRows,
+                            'product-failed',
+                            'Already exists, but its categories could not ' +
+                                `be updated: ${errorText(error)}`,
+                        ),
+                    );
+                }
+            }
 
             const ready: OPNImportRow[][] = [];
 
@@ -656,7 +711,7 @@ export class ProductImportService {
 
         const petTypes = uniqueValues(
             productRows.flatMap(
-                row => row.petTypes,
+                row => mapPets(row),
             ),
         );
 

@@ -43,8 +43,8 @@ const SECTIONS: Array<{
     },
     {
         kind: 'product-skipped',
-        title: 'Products skipped because they already exist',
-        action: 'Product was not changed.',
+        title: 'Products that already existed (only categories and filters updated)',
+        action: 'Nothing else about the product was changed.',
     },
     {
         kind: 'product-failed',

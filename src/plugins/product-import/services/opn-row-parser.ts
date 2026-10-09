@@ -288,6 +288,12 @@ function inferPetTypes(
             add('Horse');
         }
 
+        // "Fish" next to another pet is an ingredient (e.g. "Dog Food with
+        // Ocean White Fish"), not a pet
+        if (types.length > 1) {
+            return types.filter(type => type !== 'Fish');
+        }
+
         return types;
     };
 

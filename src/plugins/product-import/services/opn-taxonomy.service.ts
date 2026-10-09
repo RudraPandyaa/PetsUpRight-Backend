@@ -9,12 +9,15 @@ import {
     RequestContext,
 } from '@vendure/core';
 
-import type { OPNImportRow } from './opn-import.types';
 import {
-    getCollectionCodes,
-    getCollectionPaths,
-    OPN_FACETS,
-} from './opn-taxonomy';
+    allCategoryPaths,
+    CategoryPath,
+    categoryPathLevels,
+    mapPets,
+    mapRowToCategoryPaths,
+} from './opn-category-map';
+import type { OPNImportRow } from './opn-import.types';
+import { OPN_FACETS } from './opn-taxonomy';
 
 type FacetDefinition = {
     code: string;
@@ -342,9 +345,11 @@ export class OpnTaxonomyService {
             rows.map(row => row.brand),
         );
 
+        // The client's pet sections ("Small Animal" becomes "Hamster /
+        // Guinea Pig / Turtle / Rabbit", "All" becomes Dog and Cat)
         await addFacetValues(
             OPN_FACETS.petType,
-            rows.flatMap(row => row.petTypes),
+            rows.flatMap(row => mapPets(row)),
         );
 
         await addFacetValues(
@@ -367,88 +372,20 @@ export class OpnTaxonomyService {
             rows.map(row => row.packing),
         );
 
-        const seenPaths = new Set<string>();
-
+        // Place the product in the client's category structure
         for (const row of rows) {
-            for (const path of getCollectionPaths(row)) {
-                const codes = getCollectionCodes(path);
+            for (const path of mapRowToCategoryPaths(row)) {
+                const placed = await this.ensureCategoryPath(
+                    ctx,
+                    path,
+                );
 
-                if (!codes.length) {
-                    continue;
-                }
-
-                const names = [
-                    path.petType,
-                    path.primary,
-                    path.secondary,
-                    path.tertiary,
-                ]
-                    .map(value => value.trim())
-                    .filter(Boolean);
-
-                let parentId: ID | undefined;
-                const breadcrumb: string[] = [];
-
-                for (
-                    let index = 0;
-                    index < codes.length;
-                    index++
-                ) {
-                    const collectionCode = codes[index];
-                    breadcrumb.push(names[index]);
-
-                    const pathKey =
-                        `${collectionCode}:${breadcrumb.join('/')}`;
-
-                    if (seenPaths.has(pathKey)) {
-                        const existingId =
-                            this.collectionCache.get(
-                                this.scopeKey(
-                                    ctx,
-                                    collectionCode,
-                                ),
-                            );
-
-                        if (existingId !== undefined) {
-                            parentId = existingId;
-                            collectionIds.add(existingId);
-                        }
-
-                        continue;
-                    }
-
-                    seenPaths.add(pathKey);
-
-                    const collectionFacetValueId =
-                        await this.ensureFacetValue(
-                            ctx,
-                            OPN_FACETS.collectionPath,
-                            breadcrumb.join(' / '),
-                            collectionCode,
-                            true,
-                        );
-
-                    if (
-                        collectionFacetValueId === undefined
-                    ) {
-                        continue;
-                    }
-
-                    facetValueIds.add(
-                        collectionFacetValueId,
-                    );
-
-                    parentId =
-                        await this.ensureCollection(
-                            ctx,
-                            collectionCode,
-                            names[index],
-                            collectionFacetValueId,
-                            parentId,
-                        );
-
-                    collectionIds.add(parentId);
-                }
+                placed.facetValueIds.forEach(id =>
+                    facetValueIds.add(id),
+                );
+                placed.collectionIds.forEach(id =>
+                    collectionIds.add(id),
+                );
             }
         }
 
@@ -456,6 +393,65 @@ export class OpnTaxonomyService {
             facetValueIds: [...facetValueIds],
             collectionIds: [...collectionIds],
         };
+    }
+
+    /**
+     * Creates (or finds) the collections of a category path, pet first. Each
+     * collection shows the products that carry its private "Collection Path"
+     * facet value, so a product is given the facet values of every level.
+     */
+    private async ensureCategoryPath(
+        ctx: RequestContext,
+        path: CategoryPath,
+    ): Promise<ProductTaxonomy> {
+        const facetValueIds: ID[] = [];
+        const collectionIds: ID[] = [];
+        let parentId: ID | undefined;
+
+        for (const level of categoryPathLevels(path)) {
+            const facetValueId = await this.ensureFacetValue(
+                ctx,
+                OPN_FACETS.collectionPath,
+                level.breadcrumb,
+                level.code,
+                true,
+            );
+
+            if (facetValueId === undefined) {
+                break;
+            }
+
+            parentId = await this.ensureCollection(
+                ctx,
+                level.code,
+                level.name,
+                facetValueId,
+                parentId,
+            );
+
+            facetValueIds.push(facetValueId);
+            collectionIds.push(parentId);
+        }
+
+        return { facetValueIds, collectionIds };
+    }
+
+    /**
+     * Creates every collection of the client's category structure, including
+     * categories that have no products yet, so the storefront menu matches
+     * the client's sitemap. Returns the collection IDs.
+     */
+    async ensureClientCategoryTree(
+        ctx: RequestContext,
+    ): Promise<ID[]> {
+        const collectionIds = new Set<ID>();
+
+        for (const path of allCategoryPaths()) {
+            const placed = await this.ensureCategoryPath(ctx, path);
+            placed.collectionIds.forEach(id => collectionIds.add(id));
+        }
+
+        return [...collectionIds];
     }
 
     /**
