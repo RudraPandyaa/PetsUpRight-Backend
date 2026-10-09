@@ -93,6 +93,24 @@ function getValue(
     return findCell(headerMap, key)?.value ?? '';
 }
 
+/**
+ * The MRP: the known price columns first (newest first, see
+ * opn-column-map.ts), then any other column whose name contains "MRP",
+ * e.g. "Revised MRP" or "MRP (INR)".
+ */
+function getPriceCell(
+    headerMap: Map<string, HeaderCell>,
+): HeaderCell | undefined {
+    return (
+        findCell(headerMap, 'price') ??
+        [...headerMap.entries()].find(
+            ([header, cell]) =>
+                header.includes('mrp') &&
+                normalizeText(cell.value),
+        )?.[1]
+    );
+}
+
 // Product name columns other than "Product Description"
 const DEDICATED_NAME_HEADERS = OPN_COLUMN_ALIASES.productName
     .map(normalizeHeader)
@@ -134,7 +152,9 @@ function createSource(
         const cell =
             key === 'productName'
                 ? getProductNameCell(headerMap)
-                : findCell(headerMap, key);
+                : key === 'price'
+                  ? getPriceCell(headerMap)
+                  : findCell(headerMap, key);
 
         if (cell) {
             source[key] = {
@@ -541,7 +561,7 @@ export function parseOPNRows(
 
             price:
                 optionalNumber(
-                    getValue(headers, 'price'),
+                    getPriceCell(headers)?.value,
                 ) ?? 0,
 
             // Workbook currently has no stock column.

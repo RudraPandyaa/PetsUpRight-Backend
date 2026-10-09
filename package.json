@@ -15,7 +15,8 @@
     "build:dashboard": "vendure build dashboard",
     "start:server": "node ./dist/index.js",
     "start:worker": "node ./dist/index-worker.js",
-    "start": "vendure start all"
+    "start": "vendure start all",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@vendure/asset-server-plugin": "3.7.2",
@@ -26,6 +27,7 @@
     "better-sqlite3": "12.11.1",
     "cloudinary": "^2.11.0",
     "dotenv": "17.4.2",
+    "mysql2": "^3.24.5",
     "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
     "razorpay": "^2.9.8",
@@ -34,6 +36,7 @@
   "devDependencies": {
     "@vendure/cli": "3.7.2",
     "@vendure/create": "^3.7.2",
+    "patch-package": "^8.0.1",
     "ts-node": "10.9.2",
     "tsx": "^4.23.13",
     "typescript": "5.8.2",

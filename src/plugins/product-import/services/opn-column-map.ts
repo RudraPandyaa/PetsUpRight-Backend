@@ -35,12 +35,16 @@ export const OPN_COLUMN_ALIASES = {
         'ASIN',
     ],
 
+    // All of these are the MRP. When a sheet has several, the first one in
+    // this list with a value wins, so newer prices come first. Any other
+    // column whose name contains "MRP" is also used (see opn-row-parser.ts).
     price: [
+        'NEW Reduce mrp',
+        'Reduce MRP',
+        'New MRP effective from Nov 2024',
+        'New MRP',
         'MRP',
         'Price',
-        'New MRP',
-        'New MRP effective from Nov 2024',
-        'NEW Reduce mrp',
     ],
 
     weightOrCount: [

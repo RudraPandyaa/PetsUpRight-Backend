@@ -362,6 +362,10 @@ export class ProductImportService {
             // filter or collection.
             this.taxonomy.resetCache();
 
+            // Collections are refreshed once at the end instead of after
+            // every product (resumed in the finally block below)
+            this.taxonomy.pauseCollectionUpdates();
+
             const ready: OPNImportRow[][] = [];
 
             for (const productRows of toCreate) {
@@ -489,6 +493,8 @@ export class ProductImportService {
             });
         } finally {
             await imageQueue.drain();
+
+            this.taxonomy.resumeCollectionUpdates();
 
             await this.taxonomy
                 .refreshCollections(

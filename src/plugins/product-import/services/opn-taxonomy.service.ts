@@ -458,6 +458,19 @@ export class OpnTaxonomyService {
         };
     }
 
+    /**
+     * While paused, saving a product no longer queues a job that re-checks
+     * every collection. A bulk import would otherwise queue one such job per
+     * product. Resume afterwards and call refreshCollections() once.
+     */
+    pauseCollectionUpdates(): void {
+        this.collections.setApplyAllFiltersOnProductUpdates(false);
+    }
+
+    resumeCollectionUpdates(): void {
+        this.collections.setApplyAllFiltersOnProductUpdates(true);
+    }
+
     async refreshCollections(
         ctx: RequestContext,
         collectionIds: ID[],

@@ -66,6 +66,7 @@ const priceHeaderNames = new Set([
     'newmrp',
     'newmrpeffectivefromnov2024',
     'newreducemrp',
+    'reducemrp',
 ]);
 
 function isOPNHeaderRow(row: unknown[]): boolean {
@@ -74,7 +75,11 @@ function isOPNHeaderRow(row: unknown[]): boolean {
     return (
         cells.some(cell => productHeaderNames.has(cell)) &&
         cells.some(cell => itemCodeHeaderNames.has(cell)) &&
-        cells.some(cell => priceHeaderNames.has(cell))
+        // Any MRP column ("MRP", "New MRP", "Reduce MRP", ...) or "Price"
+        cells.some(
+            cell =>
+                priceHeaderNames.has(cell) || cell.includes('mrp'),
+        )
     );
 }
 

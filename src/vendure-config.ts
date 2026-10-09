@@ -68,19 +68,32 @@ export const config: VendureConfig = {
     requireVerification: true,
     verificationTokenDuration: '1h',
   },
+  // MySQL 8 (or MariaDB). DATABASE_URL looks like
+  // mysql://user:password@host:3306/database
+  // Hosted MySQL services usually require TLS: set DATABASE_SSL=true.
   dbConnectionOptions: {
-    type: "postgres",
+    type: "mysql",
     url: process.env.DATABASE_URL,
     synchronize: false,
     migrations: [path.join(__dirname, "./migrations/*.+(js|ts)")],
     logging: false,
-    ssl: true,
+    charset: "utf8mb4_unicode_ci",
+    // Store and read all dates as UTC, whatever the server's time zone
+    timezone: "Z",
+    ssl:
+      process.env.DATABASE_SSL === "true"
+        ? {
+            rejectUnauthorized:
+              process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
+            ...(process.env.DATABASE_SSL_CA
+              ? { ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, "\n") }
+              : {}),
+          }
+        : undefined,
     extra: {
-      max: 10,
-      min: 1,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-  },
+      connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 10,
+      connectTimeout: 10000,
+    },
   },
   paymentOptions: {
     paymentMethodHandlers: [razorpayPaymentHandler],
@@ -381,7 +394,13 @@ export const config: VendureConfig = {
       storageStrategyFactory: () => new CloudinaryAssetStorageStrategy(),
     }),
     DefaultSchedulerPlugin.init(),
-    DefaultJobQueuePlugin.init({ useDatabaseForBuffer: true }),
+    DefaultJobQueuePlugin.init({
+      useDatabaseForBuffer: true,
+      // How often (ms) the worker checks the database for new jobs. Vendure's
+      // default is 200 ms; checking less often lowers database load, which
+      // matters on hosted databases with usage quotas.
+      pollInterval: Number(process.env.JOB_QUEUE_POLL_INTERVAL_MS) || 1000,
+    }),
     DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
     EmailPlugin.init({
       route: "mailbox",

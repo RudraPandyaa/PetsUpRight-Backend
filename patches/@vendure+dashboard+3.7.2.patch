@@ -1,0 +1,25 @@
+diff --git a/node_modules/@vendure/dashboard/src/app/main.tsx b/node_modules/@vendure/dashboard/src/app/main.tsx
+index 6bbeaad..ca9800a 100644
+--- a/node_modules/@vendure/dashboard/src/app/main.tsx
++++ b/node_modules/@vendure/dashboard/src/app/main.tsx
+@@ -105,7 +105,20 @@ function InnerApp() {
+         setDocumentDirection(isRTL ? 'rtl' : 'ltr');
+     }, [isRTL]);
+ 
++    // PetsUpRight patch: useExtendedRouter replaces the router once the
++    // dashboard extensions (plugin pages) are registered. The router's
++    // Transitioner only runs the initial load for the first router it sees,
++    // so the replacement never loads and the dashboard stays blank. Load any
++    // router that has not loaded yet, once RouterProvider is rendered (it
++    // passes the auth context the routes need).
+     const isReady = hasSetCustomFieldsMap || auth.status === 'unauthenticated';
++
++    useEffect(() => {
++        if (isReady && router.state.status === 'idle' && router.state.matches.length === 0) {
++            void router.load().catch(console.error);
++        }
++    }, [router, isReady]);
++
+     return (
+         <>
+             <DirectionProvider direction={isRTL ? 'rtl' : 'ltr'}>
