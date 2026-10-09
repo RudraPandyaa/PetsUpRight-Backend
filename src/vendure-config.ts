@@ -65,6 +65,13 @@ export const config: VendureConfig = {
     },
     cookieOptions: {
       secret: process.env.COOKIE_SECRET,
+      // Separate cookies, so an admin logged into the dashboard is not also
+      // "logged in" on the storefront of the same host (checkout would then
+      // fail with "Cannot set a Customer for the Order when already logged in")
+      name: {
+        shop: "shop-session",
+        admin: "admin-session",
+      },
     },
     requireVerification: true,
     verificationTokenDuration: '1h',
