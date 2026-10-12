@@ -28,6 +28,21 @@ import { razorpayPaymentHandler } from "./plugins/razorpay/razorpay-payment-hand
 import { RazorpayPlugin } from "./plugins/razorpay/razorpay.plugin";
 import { json } from 'body-parser';
 const IS_DEV = process.env.APP_ENV === "dev";
+const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
+// TLS for hosted databases. Supabase and similar use their own certificate
+// authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
+const databaseSsl =
+  process.env.DATABASE_SSL === "true"
+    ? {
+        rejectUnauthorized:
+          process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
+        ...(process.env.DATABASE_SSL_CA
+          ? { ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, "\n") }
+          : {}),
+      }
+    : undefined;
+// Public address of the storefront (Nuxt), used for links in emails
+const storefrontUrl = (process.env.STOREFRONT_URL || "http://localhost:3001").replace(/\/+$/, "");
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
 // must take precedence over any value baked into the .env file at scaffold time.
 const serverPort =
@@ -76,33 +91,40 @@ export const config: VendureConfig = {
     requireVerification: true,
     verificationTokenDuration: '1h',
   },
-  // MySQL 8 (or MariaDB). DATABASE_URL looks like
-  // mysql://user:password@host:3306/database
-  // Hosted MySQL services usually require TLS: set DATABASE_SSL=true.
-  dbConnectionOptions: {
-    type: "mysql",
-    url: process.env.DATABASE_URL,
-    synchronize: false,
-    migrations: [path.join(__dirname, "./migrations/*.+(js|ts)")],
-    logging: false,
-    charset: "utf8mb4_unicode_ci",
-    // Store and read all dates as UTC, whatever the server's time zone
-    timezone: "Z",
-    ssl:
-      process.env.DATABASE_SSL === "true"
-        ? {
-            rejectUnauthorized:
-              process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
-            ...(process.env.DATABASE_SSL_CA
-              ? { ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, "\n") }
-              : {}),
-          }
-        : undefined,
-    extra: {
-      connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 10,
-      connectTimeout: 10000,
-    },
-  },
+  // MySQL 8 or PostgreSQL, chosen by DATABASE_URL:
+  //   mysql://user:password@host:3306/database       (local development)
+  //   postgresql://user:password@host:5432/database  (e.g. Supabase)
+  // Each database type has its own migrations in src/migrations/<type>.
+  // Hosted databases usually require TLS: set DATABASE_SSL=true.
+  dbConnectionOptions: IS_POSTGRES
+    ? {
+        type: "postgres",
+        url: process.env.DATABASE_URL,
+        synchronize: false,
+        migrations: [path.join(__dirname, "./migrations/postgres/*.+(js|ts)")],
+        logging: false,
+        ssl: databaseSsl,
+        extra: {
+          max: Number(process.env.DATABASE_POOL_SIZE) || 10,
+          connectionTimeoutMillis: 10000,
+          idleTimeoutMillis: 30000,
+        },
+      }
+    : {
+        type: "mysql",
+        url: process.env.DATABASE_URL,
+        synchronize: false,
+        migrations: [path.join(__dirname, "./migrations/mysql/*.+(js|ts)")],
+        logging: false,
+        charset: "utf8mb4_unicode_ci",
+        // Store and read all dates as UTC, whatever the server's time zone
+        timezone: "Z",
+        ssl: databaseSsl,
+        extra: {
+          connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 10,
+          connectTimeout: 10000,
+        },
+      },
   paymentOptions: {
     paymentMethodHandlers: [razorpayPaymentHandler],
   },
@@ -433,10 +455,10 @@ export const config: VendureConfig = {
 
       globalTemplateVars: {
         fromAddress: process.env.SMTP_FROM,
-        verifyEmailAddressUrl: "http://localhost:3001/verify",
-        passwordResetUrl: "http://localhost:3001/reset-password",
-        changeEmailAddressUrl:
-          "http://localhost:3001/verify-email-address-change",
+        // Links in customer emails point to the storefront
+        verifyEmailAddressUrl: `${storefrontUrl}/verify`,
+        passwordResetUrl: `${storefrontUrl}/reset-password`,
+        changeEmailAddressUrl: `${storefrontUrl}/verify-email-address-change`,
       },
     }),
     CmsPlugin.init({}),

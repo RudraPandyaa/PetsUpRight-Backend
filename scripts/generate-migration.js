@@ -4,6 +4,9 @@
  * Uses the compiled config, so run `npx tsc` first:
  *
  *   npx tsc && node scripts/generate-migration.js <name>
+ *
+ * The database (and so the migrations folder) comes from DATABASE_URL; set
+ * it in the environment to generate for another database than in .env.
  */
 const path = require('path');
 const { generateMigration } = require('@vendure/core');
@@ -18,7 +21,12 @@ if (!name) {
 
 generateMigration(config, {
     name,
-    outputDir: path.join(__dirname, '../src/migrations'),
+    // src/migrations/mysql or src/migrations/postgres, by DATABASE_URL
+    outputDir: path.join(
+        __dirname,
+        '../src/migrations',
+        config.dbConnectionOptions.type === 'postgres' ? 'postgres' : 'mysql',
+    ),
 })
     .then(() => process.exit(0))
     .catch(error => {
