@@ -29,6 +29,7 @@ import { RazorpayPlugin } from "./plugins/razorpay/razorpay.plugin";
 import { json } from 'body-parser';
 const IS_DEV = process.env.APP_ENV === "dev";
 const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
+import { HealthPlugin } from './plugins/health/health.plugin'
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
 const databaseSsl =
@@ -468,6 +469,7 @@ export const config: VendureConfig = {
       imageConcurrency: Number(process.env.IMPORT_IMAGE_CONCURRENCY) || undefined,
     }),
     RazorpayPlugin,
+    HealthPlugin,
     ProductReviewPlugin,
     DeliveryPincodePlugin,
     DashboardPlugin.init({
