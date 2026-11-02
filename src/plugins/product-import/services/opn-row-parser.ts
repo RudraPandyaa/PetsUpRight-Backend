@@ -418,10 +418,21 @@ export function parseOPNRows(
             getValue(headers, 'unit'),
         );
 
-        const option = createVariantOption(
-            weightOrCount,
-            unit,
+        const option1Group = normalizeText(
+                headers.get(normalizeHeader('option1Group'))?.value,
         );
+
+        const option1Value = normalizeText(
+                headers.get(normalizeHeader('option1Value'))?.value,
+        );
+
+        const option =
+            option1Group && option1Value
+                ? {
+                    group: option1Group,
+                    value: option1Value,
+                }
+                : createVariantOption(weightOrCount, unit);
 
         const itemCode = normalizeText(
             getValue(headers, 'sku'),

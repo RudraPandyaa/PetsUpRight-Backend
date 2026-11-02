@@ -29,6 +29,8 @@ import { RazorpayPlugin } from "./plugins/razorpay/razorpay.plugin";
 import { json } from 'body-parser';
 const IS_DEV = process.env.APP_ENV === "dev";
 const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
+import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
+
 import { HealthPlugin } from './plugins/health/health.plugin'
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
@@ -72,6 +74,16 @@ export const config: VendureConfig = {
         shopApiDebug: true,
       }
       : {}),
+        cors: {
+            origin: [
+                'http://127.0.0.1:5173',
+                'http://localhost:5173',
+                'http://localhost:3001',
+                'http://127.0.0.1:3001',
+                'http://localhost:3000'
+            ],
+            credentials: true,
+        },
   },
   authOptions: {
     tokenMethod: ["bearer", "cookie"],
@@ -89,7 +101,7 @@ export const config: VendureConfig = {
         admin: "admin-session",
       },
     },
-    requireVerification: true,
+    requireVerification: false,
     verificationTokenDuration: '1h',
   },
   // MySQL 8 or PostgreSQL, chosen by DATABASE_URL:
@@ -472,6 +484,9 @@ export const config: VendureConfig = {
     HealthPlugin,
     ProductReviewPlugin,
     DeliveryPincodePlugin,
+    GoogleAuthPlugin.init({
+        googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    }),
     DashboardPlugin.init({
       route: "dashboard",
       appDir: IS_DEV

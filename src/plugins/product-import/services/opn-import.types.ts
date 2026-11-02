@@ -50,7 +50,7 @@ export type OPNImportRow = {
     variantName: string;
 
     // Variant option
-    optionGroup: 'Weight' | 'Count' | 'Size';
+    optionGroup: string;
     optionValue: string;
 
     // Price and stock

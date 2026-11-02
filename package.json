@@ -27,6 +27,8 @@
     "better-sqlite3": "12.11.1",
     "cloudinary": "^2.11.0",
     "dotenv": "17.4.2",
+    "google-auth-library": "^11.3.2",
+    "graphql-tag": "^2.12.7",
     "mysql2": "^3.24.5",
     "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
