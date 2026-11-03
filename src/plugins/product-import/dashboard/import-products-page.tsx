@@ -11,6 +11,11 @@ import { graphql } from '@/gql';
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 
+import {
+    buildTemplateWorkbook,
+    TEMPLATE_FILE_NAME,
+} from './import-template';
+
 const previewQuery = graphql(`query PreviewProductSheet($rows: JSON!) {
     previewProductImport(rows: $rows) {
         products
@@ -174,24 +179,6 @@ function parseOPNSheet(
     return rows;
 }
 
-const headers = [
-    'productSlug',
-    'productName',
-    'description',
-    'petType',
-    'isFood',
-    'ingredients',
-    'usageAndFeeding',
-    'specifications',
-    'sku',
-    'price',
-    'stock',
-    ...Array.from({ length: 5 }, (_, index) => [
-        `option${index + 1}Group`,
-        `option${index + 1}Value`,
-    ]).flat(),
-];
-
 function IssueList({ issues }: { issues: Result['issues'] }) {
     return (
         <>
@@ -215,82 +202,10 @@ export function ImportProductsPage() {
     const [busy, setBusy] = useState(false);
     const [fileName, setFileName] = useState('');
 
+    // The product master template with instructions and the allowed
+    // categories, see import-template.ts
     function template() {
-        const book = XLSX.utils.book_new();
-        const sheet = XLSX.utils.aoa_to_sheet([
-            headers,
-
-            [
-                'healthy-dog-food',
-                'Healthy Chicken Dog Food',
-                'Complete daily food for adult dogs',
-                'Dog',
-                'Yes',
-                'Chicken | Rice | Carrot | Fish Oil',
-                'Serve according to the dog weight chart. Provide fresh water.',
-                'Net weight: 1kg; Suitable for adult dogs',
-                'HDF-1KG-CHICKEN',
-                599,
-                20,
-                'Weight',
-                '1kg',
-                'Flavour',
-                'Chicken',
-            ],
-
-            [
-                'healthy-dog-food',
-                'Healthy Chicken Dog Food',
-                'Complete daily food for adult dogs',
-                'Dog',
-                'Yes',
-                'Chicken | Rice | Carrot | Fish Oil',
-                'Serve according to the dog weight chart. Provide fresh water.',
-                'Net weight: 1kg; Suitable for adult dogs',
-                'HDF-2KG-CHICKEN',
-                999,
-                12,
-                'Weight',
-                '2kg',
-                'Flavour',
-                'Chicken',
-            ],
-
-            [
-                'comfortable-dog-bed',
-                'Comfortable Dog Bed',
-                'Soft and washable bed for dogs',
-                'Dog',
-                'No',
-                '',
-                '',
-                'Material: Cotton; Washable cover: Yes',
-                'CDB-M-BLUE',
-                1299,
-                8,
-                'Size',
-                'Medium',
-                'Colour',
-                'Blue',
-            ],
-        ]);
-        sheet['!cols'] = [
-            { wch: 25 }, // productSlug
-            { wch: 30 }, // productName
-            { wch: 45 }, // description
-            { wch: 15 }, // petType
-            { wch: 10 }, // isFood
-            { wch: 50 }, // ingredients
-            { wch: 55 }, // usageAndFeeding
-            { wch: 45 }, // specifications
-            { wch: 25 }, // sku
-            { wch: 12 }, // price
-            { wch: 12 }, // stock
-            ...Array.from({ length: 10 }, () => ({ wch: 20 })),
-        ];
-
-        XLSX.utils.book_append_sheet(book, sheet, 'Products');
-        XLSX.writeFile(book, 'petsupright-products.xlsx');
+        XLSX.writeFile(buildTemplateWorkbook(XLSX), TEMPLATE_FILE_NAME);
     }
 
     async function load(file?: File) {
