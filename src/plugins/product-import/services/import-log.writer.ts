@@ -22,6 +22,8 @@ export type ImportLog = {
     finishedAt: Date;
     rowsRead: number;
     created: CreatedProductLog[];
+    // Products that already existed and were rewritten from the sheet
+    updated: CreatedProductLog[];
     issues: ImportIssue[];
     // Set when the import stopped because of an unexpected error
     fatalError?: string;
@@ -152,6 +154,7 @@ function render(log: ImportLog): string {
         `Rows skipped (problems):       ${count('row-skipped')}`,
         `Products created:              ${log.created.length} ` +
             `(${createdVariants} variants)`,
+        `Products updated (existed):    ${log.updated.length}`,
         `Products skipped (exist):      ${count('product-skipped')}`,
         `Products failed to save:       ${count('product-failed')}`,
         `Images that failed:            ${count('image-failed')}`,
@@ -184,19 +187,26 @@ function render(log: ImportLog): string {
         });
     }
 
-    if (log.created.length) {
+    for (const [title, products] of [
+        ['Products created', log.created],
+        ['Products updated (already existed, rewritten from the sheet)', log.updated],
+    ] as const) {
+        if (!products.length) {
+            continue;
+        }
+
         lines.push(
-            ...heading(`Products created (${log.created.length})`),
+            ...heading(`${title} (${products.length})`),
         );
 
-        // Products are created in parallel, so sort them back into sheet order
-        const created = [...log.created].sort(
+        // Products are saved in parallel, so sort them back into sheet order
+        const sorted = [...products].sort(
             (a, b) =>
                 a.sheetName.localeCompare(b.sheetName) ||
                 a.rows[0] - b.rows[0],
         );
 
-        for (const product of created) {
+        for (const product of sorted) {
             lines.push(
                 `[${product.sheetName}] row ` +
                     `${formatRows(product.rows)}: ` +

@@ -5,10 +5,12 @@ import {
     ProductOptionGroupService,
     ProductOptionService,
     ProductService,
+    ProductVariant,
     ProductVariantService,
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
+import { In, IsNull } from 'typeorm';
 import {
     ImageImportCache,
     OpnAssetService,
@@ -42,9 +44,14 @@ import {
 type Result = {
     products: number;
     variants: number;
+    // Products that already existed and were rewritten from the sheet
+    updatedProducts: number;
     issues: ImportIssue[];
     logFile?: string;
 };
+
+// A row of an existing product that could not be applied to it
+type RowProblem = { row: OPNImportRow; problem: string };
 
 const normalize = (value: string): string =>
     value.trim().toLowerCase();
@@ -210,16 +217,53 @@ export class ProductImportService {
             },
         );
 
+        // Products imported earlier under another name or template are
+        // found by a variant's barcode (UPC/EAN)
+        const barcodeRows = rows.filter(
+            row =>
+                row.barcode &&
+                !existingProducts.has(row.productGroupKey),
+        );
+
+        if (barcodeRows.length) {
+            const variants = await this.connection
+                .getRepository(ctx, ProductVariant)
+                .find({
+                    where: {
+                        customFields: {
+                            barcode: In(barcodeRows.map(row => row.barcode)),
+                        },
+                        deletedAt: IsNull(),
+                    } as any,
+                    select: ['id', 'productId', 'customFields'] as any,
+                });
+
+            for (const row of barcodeRows) {
+                const variant = variants.find(
+                    item =>
+                        (item.customFields as any)?.barcode === row.barcode,
+                );
+
+                if (variant && !existingProducts.has(row.productGroupKey)) {
+                    existingProducts.set(row.productGroupKey, {
+                        productId: variant.productId,
+                        reason: `barcode ${row.barcode} already exists`,
+                    });
+                }
+            }
+        }
+
         return existingProducts;
     }
 
     /**
      * Counts what would be imported. `products` and `variants` only count
      * rows without problems; rows with problems are listed in `issues` and
-     * will be skipped by the import.
+     * will be skipped by the import. `updatedProducts` of those products
+     * already exist and would be rewritten.
      */
     async preview(
-        _ctx: RequestContext,
+        ctx: RequestContext,
         raw: unknown,
     ): Promise<Result> {
         const profiler =
@@ -240,9 +284,12 @@ export class ProductImportService {
                 .filter(Boolean),
         );
 
+        const existing = await this.findExistingProducts(ctx, rows);
+
         const result = {
             products: products.size,
             variants: rows.length,
+            updatedProducts: existing.size,
             issues,
         };
 
@@ -256,9 +303,11 @@ export class ProductImportService {
     }
 
     /**
-     * Imports the sheet one product at a time. Rows with a problem, products
-     * that already exist and products that fail to save are skipped; the
-     * rest is imported. Everything is written to a log file in import-logs/.
+     * Imports the sheet one product at a time. New products are created;
+     * products that already exist (same slug, SKU or barcode) are rewritten
+     * from the sheet, images included. Rows with a problem and products that
+     * fail to save are skipped. Everything is written to a log file in
+     * import-logs/.
      */
     async import(
         ctx: RequestContext,
@@ -271,11 +320,31 @@ export class ProductImportService {
         const startedAt = new Date();
         const issues: ImportIssue[] = [];
         const created: CreatedProductLog[] = [];
+        const updated: CreatedProductLog[] = [];
         const affectedCollectionIds = new Set<ID>();
         const imageQueue = createTaskQueue(
             this.importOptions.imageConcurrency,
         );
         const imageCache: ImageImportCache = new Map();
+
+        // Queued, not awaited: images download in the background while more
+        // products are saved
+        const queueImages = (
+            productId: ID,
+            productRows: OPNImportRow[],
+        ) => {
+            if (productRows.some(row => row.imageCells.length)) {
+                imageQueue.add(() =>
+                    this.importProductImages(
+                        ctx,
+                        productId,
+                        productRows,
+                        imageCache,
+                        issues,
+                    ),
+                );
+            }
+        };
 
         let rowsRead = 0;
         let fatalError: string | undefined;
@@ -376,78 +445,95 @@ export class ProductImportService {
                 affectedCollectionIds.add(id);
             }
 
-            // Products that already exist are not changed, except for their
-            // categories and filters, so importing a sheet again re-maps
-            // them to the current category structure
-            for (const { productId, reason, rows: productRows } of toUpdate) {
+            // Products that already exist are rewritten from the sheet:
+            // details, categories, filters, variants and images
+            const readyUpdates: typeof toUpdate = [];
+
+            for (const update of toUpdate) {
                 try {
-                    const taxonomy = await this.taxonomy.prepareProduct(
-                        ctx,
-                        productRows,
-                    );
-
-                    await this.products.update(ctx, {
-                        id: productId,
-                        facetValueIds: taxonomy.facetValueIds,
-                        customFields: {
-                            petType:
-                                uniqueValues(
-                                    productRows.flatMap(row => mapPets(row)),
-                                ).join(', ') || undefined,
-                        },
-                    });
-
-                    const imageLinks = new Map<
-                        string,
-                        { row: OPNImportRow; cell: OPNSourceCell }
-                    >();
-
-                    for (const row of productRows) {
-                        for (const cell of row.imageCells) {
-                            if (!imageLinks.has(cell.value)) {
-                                imageLinks.set(cell.value, { row, cell });
-                            }
-                        }
-                    }
-
-                    if (imageLinks.size) {
-                        const first = productRows[0];
-
-                        imageQueue.add(() =>
-                            this.importProductImages(
-                                ctx,
-                                productId,
-                                first.productSlug,
-                                [...imageLinks.values()],
-                                imageCache,
-                                issues,
-                            ),
-                        );
-                    }
-
-                    for (const collectionId of taxonomy.collectionIds) {
-                        affectedCollectionIds.add(collectionId);
-                    }
-
-                    issues.push(
-                        productIssue(
-                            productRows,
-                            'product-skipped',
-                            `Already exists (${reason}); only its ` +
-                                'categories and filters were updated',
-                        ),
-                    );
+                    await this.taxonomy.prepareProduct(ctx, update.rows);
+                    readyUpdates.push(update);
                 } catch (error) {
+                    this.taxonomy.resetCache();
                     issues.push(
                         productIssue(
-                            productRows,
+                            update.rows,
                             'product-failed',
-                            'Already exists, but its categories could not ' +
-                                `be updated: ${errorText(error)}`,
+                            'Already exists, but its filters or collections ' +
+                                `could not be created: ${errorText(error)}`,
                         ),
                     );
                 }
             }
+
+            await forEachWithConcurrency(
+                readyUpdates,
+                this.importOptions.productConcurrency,
+                async ({ productId, rows: productRows }) => {
+                    const first = productRows[0];
+                    let outcome: {
+                        collectionIds: ID[];
+                        problems: RowProblem[];
+                    };
+
+                    try {
+                        outcome = await this.connection.withTransaction(
+                            ctx,
+                            transactionCtx =>
+                                this.updateProduct(
+                                    transactionCtx,
+                                    productId,
+                                    productRows,
+                                    languageCode,
+                                ),
+                        );
+                    } catch (error) {
+                        issues.push(
+                            productIssue(
+                                productRows,
+                                'product-failed',
+                                'Already exists, but could not be updated: ' +
+                                    errorText(error),
+                            ),
+                        );
+
+                        return;
+                    }
+
+                    updated.push({
+                        productId,
+                        productName: first.productName,
+                        sheetName: first.sheetName,
+                        rows: productRows.map(row => row.rowNumber),
+                        variants: productRows.length,
+                    });
+
+                    for (const { row, problem } of outcome.problems) {
+                        issues.push({
+                            row: row.rowNumber,
+                            message:
+                                `[${row.sheetName}] ${row.productName}: ` +
+                                problem,
+                            kind: 'row-skipped',
+                            sheetName: row.sheetName,
+                            rows: [row.rowNumber],
+                            productName: row.productName,
+                            cells: sourceCells(row, ['sku']),
+                            problem,
+                        });
+                    }
+
+                    for (const collectionId of outcome.collectionIds) {
+                        affectedCollectionIds.add(collectionId);
+                    }
+
+                    queueImages(productId, productRows);
+                },
+            );
+
+            profiler.mark('existing products updated', {
+                updated: updated.length,
+            });
 
             const ready: OPNImportRow[][] = [];
 
@@ -523,37 +609,7 @@ export class ProductImportService {
                         affectedCollectionIds.add(collectionId);
                     }
 
-                    // Every image link of every row of the product, once
-                    const imageLinks = new Map<
-                        string,
-                        { row: OPNImportRow; cell: OPNSourceCell }
-                    >();
-
-                    for (const row of productRows) {
-                        for (const cell of row.imageCells) {
-                            if (!imageLinks.has(cell.value)) {
-                                imageLinks.set(cell.value, {
-                                    row,
-                                    cell,
-                                });
-                            }
-                        }
-                    }
-
-                    if (imageLinks.size) {
-                        // Queued, not awaited: images download in the
-                        // background while more products are created.
-                        imageQueue.add(() =>
-                            this.importProductImages(
-                                ctx,
-                                product.productId,
-                                first.productSlug,
-                                [...imageLinks.values()],
-                                imageCache,
-                                issues,
-                            ),
-                        );
-                    }
+                    queueImages(product.productId, productRows);
                 },
             );
 
@@ -593,12 +649,14 @@ export class ProductImportService {
                 finishedAt: new Date(),
                 rowsRead,
                 created,
+                updated,
                 issues,
                 fatalError,
             });
 
             profiler.finish({
                 created: created.length,
+                updated: updated.length,
                 issues: issues.length,
                 logFile,
                 fatalError,
@@ -611,24 +669,45 @@ export class ProductImportService {
                 (total, product) => total + product.variants,
                 0,
             ),
+            updatedProducts: updated.length,
             issues,
             logFile,
         };
     }
 
     /**
-     * Imports all images of a product from its image links and attaches
-     * them, the first one as the featured image. Every image that fails is
-     * reported with the sheet, row, column and link it came from.
+     * Imports all images of a product from its rows' image links and makes
+     * them the product's images (replacing earlier ones), the first one as
+     * the featured image. When the sizes have their own image folders, each
+     * variant also gets the first image of its folder. Every image that
+     * fails is reported with the sheet, row, column and link it came from.
      */
     private async importProductImages(
         ctx: RequestContext,
         productId: ID,
-        productSlug: string,
-        links: Array<{ row: OPNImportRow; cell: OPNSourceCell }>,
+        productRows: OPNImportRow[],
         cache: ImageImportCache,
         issues: ImportIssue[],
     ): Promise<void> {
+        const productSlug = productRows[0].productSlug;
+
+        // Every image link of every row of the product, once
+        const linkByValue = new Map<
+            string,
+            { row: OPNImportRow; cell: OPNSourceCell }
+        >();
+
+        for (const row of productRows) {
+            for (const cell of row.imageCells) {
+                if (!linkByValue.has(cell.value)) {
+                    linkByValue.set(cell.value, { row, cell });
+                }
+            }
+        }
+
+        const links = [...linkByValue.values()];
+        const assetsByLink = new Map<string, ID[]>();
+
         const reportFailure = (
             row: OPNImportRow,
             cell: OPNSourceCell,
@@ -660,6 +739,8 @@ export class ProductImportService {
                         cache,
                     );
 
+                assetsByLink.set(cell.value, imported.assetIds);
+
                 for (const assetId of imported.assetIds) {
                     if (!assetIds.includes(assetId)) {
                         assetIds.push(assetId);
@@ -690,11 +771,20 @@ export class ProductImportService {
             return;
         }
 
+        // When every size has its own folder, the product shows the first
+        // size's images (the folders mostly repeat each other) and each
+        // variant gets its own folder's images
+        const firstLinkAssets = assetsByLink.get(links[0].cell.value) ?? [];
+        const productAssetIds =
+            links.length > 1 && firstLinkAssets.length
+                ? firstLinkAssets
+                : assetIds;
+
         try {
             await this.products.update(ctx, {
                 id: productId,
-                assetIds,
-                featuredAssetId: assetIds[0],
+                assetIds: productAssetIds,
+                featuredAssetId: productAssetIds[0],
             });
         } catch (error) {
             reportFailure(
@@ -706,7 +796,307 @@ export class ProductImportService {
                         ? error.message
                         : 'unknown error'),
             );
+
+            return;
         }
+
+        // One image folder for the whole product: variants show the
+        // product's images
+        if (links.length < 2) {
+            return;
+        }
+
+        try {
+            const variants = await this.connection
+                .getRepository(ctx, ProductVariant)
+                .find({ where: { productId, deletedAt: IsNull() } });
+
+            const updates = productRows.flatMap(row => {
+                const variant = this.matchVariant(variants, row);
+                const variantAssetIds = [
+                    ...new Set(
+                        row.imageCells.flatMap(
+                            cell => assetsByLink.get(cell.value) ?? [],
+                        ),
+                    ),
+                ];
+
+                return variant && variantAssetIds.length
+                    ? [
+                          {
+                              id: variant.id,
+                              assetIds: variantAssetIds,
+                              featuredAssetId: variantAssetIds[0],
+                          },
+                      ]
+                    : [];
+            });
+
+            if (updates.length) {
+                await this.variants.update(ctx, updates);
+            }
+        } catch (error) {
+            reportFailure(
+                links[0].row,
+                links[0].cell,
+                'Images were attached to the product, but not to its ' +
+                    'sizes: ' +
+                    (error instanceof Error
+                        ? error.message
+                        : 'unknown error'),
+            );
+        }
+    }
+
+    /** The variant of a product that a sheet row describes. */
+    private matchVariant<
+        T extends { sku: string; customFields?: unknown },
+    >(variants: T[], row: OPNImportRow): T | undefined {
+        return (
+            variants.find(
+                variant => normalize(variant.sku) === normalize(row.sku),
+            ) ??
+            (row.barcode
+                ? variants.find(
+                      variant =>
+                          (variant.customFields as any)?.barcode ===
+                          row.barcode,
+                  )
+                : undefined)
+        );
+    }
+
+    // Product details stored in custom fields, from the product's rows
+    private productCustomFields(productRows: OPNImportRow[]) {
+        const first = (selector: (row: OPNImportRow) => string) =>
+            firstValue(productRows, selector) || undefined;
+
+        return {
+            petType:
+                uniqueValues(productRows.flatMap(row => mapPets(row))).join(
+                    ', ',
+                ) || undefined,
+            isFood: productRows.some(row => row.isFood),
+            ingredients: first(row => row.ingredients),
+            usageAndFeeding: first(row => row.usageAndFeeding),
+            keyPoints: first(row => row.keyPoints),
+            analyticalConstituents: first(row => row.analyticalConstituents),
+            countryOfOrigin: first(row => row.countryOfOrigin),
+            manufacturerName: first(row => row.manufacturerName),
+            manufacturerAddress: first(row => row.manufacturerAddress),
+            supplierName: first(row => row.supplierName),
+        };
+    }
+
+    // Variant details stored in custom fields, from its row
+    private variantCustomFields(row: OPNImportRow) {
+        return {
+            itemCode: row.itemCode || undefined,
+            barcode: row.barcode || undefined,
+            asin: row.asin || undefined,
+            unit: row.unit || undefined,
+            weightInGrams: row.weightInGrams ?? undefined,
+            packing: row.packing || undefined,
+            hsnCode: row.hsnCode || undefined,
+            gstPercentage: row.gstPercentage ?? undefined,
+            casePack: row.casePack ?? undefined,
+            shelfLifeYears: row.shelfLifeYears ?? undefined,
+            packageLengthCm: row.packageLengthCm ?? undefined,
+            packageWidthCm: row.packageWidthCm ?? undefined,
+            packageHeightCm: row.packageHeightCm ?? undefined,
+        };
+    }
+
+    /**
+     * Rewrites a product that already exists from its sheet rows: name,
+     * description, details, categories and filters, and its variants
+     * (matched by SKU, barcode or size; sizes it does not have yet are
+     * added). The slug stays, so links to the product keep working, and
+     * variants not in the sheet are left as they are. Images are replaced
+     * afterwards by importProductImages(). Runs inside the per-product
+     * transaction started by import().
+     */
+    private async updateProduct(
+        ctx: RequestContext,
+        productId: ID,
+        productRows: OPNImportRow[],
+        languageCode: LanguageCode,
+    ): Promise<{ collectionIds: ID[]; problems: RowProblem[] }> {
+        const first = productRows[0];
+        const problems: RowProblem[] = [];
+
+        const taxonomy = await this.taxonomy.prepareProduct(ctx, productRows);
+
+        const existing = await this.products.findOne(ctx, productId, [
+            'optionGroups',
+            'optionGroups.options',
+        ]);
+
+        if (!existing) {
+            throw new Error(`Product ${productId} no longer exists`);
+        }
+
+        await this.products.update(ctx, {
+            id: productId,
+            enabled: true,
+            facetValueIds: taxonomy.facetValueIds,
+            translations: [
+                {
+                    languageCode,
+                    name: first.productName,
+                    slug: existing.slug,
+                    description: firstValue(productRows, row => row.description),
+                },
+            ],
+            customFields: this.productCustomFields(productRows),
+        });
+
+        const variants = await this.connection
+            .getRepository(ctx, ProductVariant)
+            .find({
+                where: { productId, deletedAt: IsNull() },
+                relations: ['options'],
+            });
+
+        // A product with one option group (e.g. Size) can be matched and
+        // extended by option value
+        const group =
+            existing.optionGroups.length === 1
+                ? existing.optionGroups[0]
+                : undefined;
+
+        const optionName = (option: { code: string; name?: string }) =>
+            normalize(option.name ?? option.code);
+
+        const usedVariantIds = new Set<ID>();
+        const toUpdate: Parameters<ProductVariantService['update']>[1] = [];
+        const toAdd: OPNImportRow[] = [];
+
+        for (const row of productRows) {
+            const free = variants.filter(
+                variant => !usedVariantIds.has(variant.id),
+            );
+            const variant =
+                this.matchVariant(free, row) ??
+                (group && row.optionValue
+                    ? free.find(item =>
+                          item.options.some(
+                              option =>
+                                  optionName(option as any) ===
+                                  normalize(row.optionValue),
+                          ),
+                      )
+                    : undefined);
+
+            if (!variant) {
+                toAdd.push(row);
+                continue;
+            }
+
+            usedVariantIds.add(variant.id);
+            toUpdate.push({
+                id: variant.id,
+                enabled: row.price > 0 && row.active,
+                price: Math.max(0, Math.round(row.price * 100)),
+                translations: [
+                    {
+                        languageCode,
+                        name: row.variantName || row.productName,
+                    },
+                ],
+                customFields: this.variantCustomFields(row),
+            });
+        }
+
+        if (toUpdate.length) {
+            await this.variants.update(ctx, toUpdate);
+        }
+
+        if (!toAdd.length) {
+            return { collectionIds: taxonomy.collectionIds, problems };
+        }
+
+        // New sizes need a value of the product's option group
+        let sizeGroup = group;
+
+        if (!sizeGroup && !existing.optionGroups.length && !variants.length) {
+            const groupName = toAdd[0].optionGroup || 'Size';
+            const created = await this.groups.create(ctx, {
+                code: createCode(`${first.productSlug}-${groupName}`),
+                translations: [{ languageCode, name: groupName }],
+            });
+
+            await this.products.addOptionGroupToProduct(
+                ctx,
+                productId,
+                created.id,
+            );
+            sizeGroup = { ...created, options: [] } as any;
+        }
+
+        if (!sizeGroup) {
+            for (const row of toAdd) {
+                problems.push({
+                    row,
+                    problem:
+                        `Size "${row.optionValue}" was not added: the ` +
+                        'existing product has a different size structure. ' +
+                        'Add this size in the dashboard.',
+                });
+            }
+
+            return { collectionIds: taxonomy.collectionIds, problems };
+        }
+
+        const options = [...(sizeGroup.options ?? [])] as Array<{
+            id: ID;
+            code: string;
+            name?: string;
+        }>;
+
+        for (const row of toAdd) {
+            if (!row.optionValue) {
+                problems.push({
+                    row,
+                    problem:
+                        'Not added to the existing product: the row has ' +
+                        'no size (Variant)',
+                });
+                continue;
+            }
+
+            let option = options.find(
+                item => optionName(item) === normalize(row.optionValue),
+            );
+
+            if (!option) {
+                option = await this.options.create(ctx, sizeGroup.id, {
+                    code: createCode(row.optionValue),
+                    translations: [{ languageCode, name: row.optionValue }],
+                });
+                options.push(option);
+            }
+
+            await this.variants.create(ctx, [
+                {
+                    productId,
+                    enabled: row.price > 0 && row.active,
+                    sku: row.sku,
+                    price: Math.max(0, Math.round(row.price * 100)),
+                    stockOnHand: row.stock,
+                    optionIds: [option.id],
+                    translations: [
+                        {
+                            languageCode,
+                            name: row.variantName || row.productName,
+                        },
+                    ],
+                    customFields: this.variantCustomFields(row),
+                },
+            ]);
+        }
+
+        return { collectionIds: taxonomy.collectionIds, problems };
     }
 
     /**
@@ -737,12 +1127,6 @@ export class ProductImportService {
             collections: taxonomy.collectionIds.length,
         });
 
-        const petTypes = uniqueValues(
-            productRows.flatMap(
-                row => mapPets(row),
-            ),
-        );
-
         const product =
             await this.products.create(
                 ctx,
@@ -765,66 +1149,8 @@ export class ProductImportService {
                                 ),
                         },
                     ],
-                    customFields: {
-                        petType:
-                            petTypes.join(', ') ||
-                            undefined,
-                        isFood:
-                            productRows.some(
-                                row =>
-                                    row.isFood,
-                            ),
-                        ingredients:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row.ingredients,
-                            ) || undefined,
-                        usageAndFeeding:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row.usageAndFeeding,
-                            ) || undefined,
-                        keyPoints:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row.keyPoints,
-                            ) || undefined,
-                        analyticalConstituents:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row
-                                        .analyticalConstituents,
-                            ) || undefined,
-                        countryOfOrigin:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row.countryOfOrigin,
-                            ) || undefined,
-                        manufacturerName:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row.manufacturerName,
-                            ) || undefined,
-                        manufacturerAddress:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row
-                                        .manufacturerAddress,
-                            ) || undefined,
-                        supplierName:
-                            firstValue(
-                                productRows,
-                                row =>
-                                    row.supplierName,
-                            ) || undefined,
-                    },
+                    customFields:
+                        this.productCustomFields(productRows),
                 },
             );
 
@@ -957,7 +1283,7 @@ export class ProductImportService {
 
                 return {
                     productId: product.id,
-                    enabled: row.price > 0,
+                    enabled: row.price > 0 && row.active,
                     sku: row.sku,
                     price: Math.max(
                         0,
@@ -979,47 +1305,8 @@ export class ProductImportService {
                                 row.productName,
                         },
                     ],
-                    customFields: {
-                        itemCode:
-                            row.itemCode ||
-                            undefined,
-                        barcode:
-                            row.barcode ||
-                            undefined,
-                        asin:
-                            row.asin ||
-                            undefined,
-                        unit:
-                            row.unit ||
-                            undefined,
-                        weightInGrams:
-                            row.weightInGrams ??
-                            undefined,
-                        packing:
-                            row.packing ||
-                            undefined,
-                        hsnCode:
-                            row.hsnCode ||
-                            undefined,
-                        gstPercentage:
-                            row.gstPercentage ??
-                            undefined,
-                        casePack:
-                            row.casePack ??
-                            undefined,
-                        shelfLifeYears:
-                            row.shelfLifeYears ??
-                            undefined,
-                        packageLengthCm:
-                            row.packageLengthCm ??
-                            undefined,
-                        packageWidthCm:
-                            row.packageWidthCm ??
-                            undefined,
-                        packageHeightCm:
-                            row.packageHeightCm ??
-                            undefined,
-                    },
+                    customFields:
+                        this.variantCustomFields(row),
                 };
             }),
         );

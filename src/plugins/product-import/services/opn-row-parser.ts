@@ -7,6 +7,10 @@ import type {
     OPNSourceCell,
 } from './opn-import.types';
 import {
+    isMasterTemplateRow,
+    parseMasterRow,
+} from './master-row-parser';
+import {
     createProductIdentity,
     createVariantOption,
     normalizeDietTypes,
@@ -390,8 +394,14 @@ export function parseOPNRows(
         );
     }
 
-    const rows = data.map((value, index) => {
+    const rows = data.map((value, index): OPNImportRow => {
         const rawRow = value as RawRow;
+
+        // The client's newer product master template has its own columns
+        if (isMasterTemplateRow(rawRow)) {
+            return parseMasterRow(rawRow, index);
+        }
+
         const headers = createHeaderMap(rawRow);
 
         const sheetName = getSheetName(rawRow);
@@ -583,6 +593,7 @@ export function parseOPNRows(
 
             // Workbook currently has no stock column.
             stock: 0,
+            active: true,
 
             weightOrCount,
             unit,

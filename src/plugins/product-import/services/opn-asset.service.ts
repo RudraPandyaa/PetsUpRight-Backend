@@ -19,6 +19,14 @@ import {
     RetryableHttpError,
     withRetry,
 } from './async-pool';
+import {
+    compareImageNames,
+    parseDropboxLink,
+} from './dropbox';
+import {
+    readZipEntries,
+    ZipEntry,
+} from './zip-reader';
 
 type AssetImportResult = {
     assetId?: ID;
@@ -40,7 +48,17 @@ export type LinkImportResult = {
 export type ImageImportCache = Map<string, Promise<AssetImportResult>>;
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+// A Dropbox folder downloads as one ZIP of all its files
+const MAX_ARCHIVE_BYTES = 300 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
+
+// Dropbox folders already downloaded in an import, by download URL, so a
+// folder linked from several rows is fetched once. Keyed by the import's
+// cache so it is dropped with it.
+const dropboxFolders = new WeakMap<
+    ImageImportCache,
+    Map<string, Promise<ZipEntry[]>>
+>();
 
 const extensionByMimeType: Record<string, string> = {
     'image/jpeg': '.jpg',
@@ -48,21 +66,6 @@ const extensionByMimeType: Record<string, string> = {
     'image/webp': '.webp',
     'image/gif': '.gif',
 };
-
-function normalizeDropboxImageUrl(value: string): string {
-    const url = new URL(value.trim());
-
-    if (
-        url.hostname === 'dropbox.com' ||
-        url.hostname === 'www.dropbox.com'
-    ) {
-        url.searchParams.delete('dl');
-        url.searchParams.set('raw', '1');
-    }
-
-    return url.toString();
-}
-
 
 /** The image type of a file, judged by its first bytes. */
 function detectImageType(buffer: Buffer): string | undefined {
@@ -167,19 +170,22 @@ export class OpnAssetService {
     /**
      * Fetches a URL, following redirects one at a time so that every hop
      * is checked against private and local addresses. Drive downloads
-     * always redirect to the actual file.
+     * always redirect to the actual file. The timeout covers reading the
+     * body too, so whole-folder downloads get a longer one.
      */
     private async fetchFollowingRedirects(
         value: string,
+        { accept = 'image/*', timeoutMs = 15_000 } = {},
     ): Promise<{ response: Response; url: URL }> {
         let url = this.validateUrl(value);
+        const signal = AbortSignal.timeout(timeoutMs);
 
         for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
             const response = await fetch(url, {
                 redirect: 'manual',
-                signal: AbortSignal.timeout(15_000),
+                signal,
                 headers: {
-                    Accept: 'image/*',
+                    Accept: accept,
                     'User-Agent':
                         'PetsUpRight-Catalog-Importer/1.0',
                 },
@@ -298,44 +304,13 @@ export class OpnAssetService {
                 );
             }
 
-            if (
-                onlyJpegOrPng &&
-                imageType !== 'image/jpeg' &&
-                imageType !== 'image/png'
-            ) {
-                throw new Error(
-                    `File is ${imageType}; only JPEG and PNG are imported`,
-                );
-            }
-
-            const urlExtension =
-                url.pathname.match(
-                    /\.(jpg|jpeg|png|webp|gif)$/i,
-                )?.[0];
-
-            const extension =
-                extensionByMimeType[imageType] ??
-                urlExtension ??
-                '.jpg';
-
-            const asset =
-                await this.assets.createFromFileStream(
-                    Readable.from(buffer),
-                    `${safeFileName(fileBaseName)}${extension}`,
-                    ctx,
-                );
-
-            if ('errorCode' in asset) {
-                return {
-                    error:
-                        asset.message ??
-                        'Vendure rejected the image',
-                };
-            }
-
-            return {
-                assetId: asset.id,
-            };
+            return await this.storeImage(
+                ctx,
+                buffer,
+                imageType,
+                fileBaseName,
+                onlyJpegOrPng,
+            );
         } catch (error) {
             return {
                 error:
@@ -344,6 +319,208 @@ export class OpnAssetService {
                         : 'Unknown image import error',
             };
         }
+    }
+
+    /**
+     * Stores downloaded image bytes as a Vendure asset (in Cloudinary).
+     * With `onlyJpegOrPng`, other image types are rejected.
+     */
+    private async storeImage(
+        ctx: RequestContext,
+        buffer: Buffer,
+        imageType: string,
+        fileBaseName: string,
+        onlyJpegOrPng: boolean,
+    ): Promise<AssetImportResult> {
+        if (
+            onlyJpegOrPng &&
+            imageType !== 'image/jpeg' &&
+            imageType !== 'image/png'
+        ) {
+            throw new Error(
+                `File is ${imageType}; only JPEG and PNG are imported`,
+            );
+        }
+
+        const asset =
+            await this.assets.createFromFileStream(
+                Readable.from(buffer),
+                `${safeFileName(fileBaseName)}${extensionByMimeType[imageType] ?? '.jpg'}`,
+                ctx,
+            );
+
+        if ('errorCode' in asset) {
+            return {
+                error:
+                    asset.message ??
+                    'Vendure rejected the image',
+            };
+        }
+
+        return {
+            assetId: asset.id,
+        };
+    }
+
+    /** Downloads a shared Dropbox folder as a ZIP and returns its files. */
+    private async downloadDropboxFolder(
+        downloadUrl: string,
+    ): Promise<ZipEntry[]> {
+        const { response } = await withRetry(
+            async () => {
+                const result = await this.fetchFollowingRedirects(
+                    downloadUrl,
+                    { accept: '*/*', timeoutMs: 180_000 },
+                );
+                const { status } = result.response;
+
+                if (status === 429 || status >= 500) {
+                    throw new RetryableHttpError(
+                        `Dropbox returned HTTP ${status}`,
+                    );
+                }
+
+                return result;
+            },
+            isRetryable,
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                response.status === 404 || response.status === 403
+                    ? 'Dropbox folder not found. It may be deleted or ' +
+                          'not shared as "Anyone with the link"'
+                    : `Dropbox returned HTTP ${response.status}`,
+            );
+        }
+
+        if (
+            Number(response.headers.get('content-length') ?? 0) >
+            MAX_ARCHIVE_BYTES
+        ) {
+            throw new Error('Dropbox folder is larger than 300 MB');
+        }
+
+        const archive = Buffer.from(await response.arrayBuffer());
+
+        if (archive.length > MAX_ARCHIVE_BYTES) {
+            throw new Error('Dropbox folder is larger than 300 MB');
+        }
+
+        try {
+            return readZipEntries(archive, MAX_IMAGE_BYTES);
+        } catch {
+            throw new Error(
+                'Dropbox did not return the folder. It may not be ' +
+                    'shared as "Anyone with the link"',
+            );
+        }
+    }
+
+    /**
+     * Imports the images of a shared Dropbox folder (subfolders included),
+     * files named "front" first, then by name in numeric order.
+     */
+    private async importDropboxFolder(
+        ctx: RequestContext,
+        downloadUrl: string,
+        productSlug: string,
+        cache: ImageImportCache,
+        result: LinkImportResult,
+    ): Promise<LinkImportResult> {
+        let folders = dropboxFolders.get(cache);
+
+        if (!folders) {
+            folders = new Map();
+            dropboxFolders.set(cache, folders);
+        }
+
+        let download = folders.get(downloadUrl);
+
+        if (!download) {
+            download = this.downloadDropboxFolder(downloadUrl);
+            folders.set(downloadUrl, download);
+        }
+
+        let entries: ZipEntry[];
+
+        try {
+            entries = await download;
+        } catch (error) {
+            result.errors.push({
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : 'Dropbox folder could not be downloaded',
+            });
+
+            return result;
+        }
+
+        const images = entries
+            .map(entry => ({
+                ...entry,
+                imageType: detectImageType(entry.data),
+            }))
+            .filter(
+                entry =>
+                    entry.imageType === 'image/jpeg' ||
+                    entry.imageType === 'image/png',
+            )
+            .sort((a, b) => compareImageNames(a.name, b.name));
+
+        if (!images.length) {
+            result.errors.push({
+                error:
+                    `Dropbox folder has no JPEG or PNG files ` +
+                    `(${entries.length} other files)`,
+            });
+
+            return result;
+        }
+
+        // One at a time, so a product's images keep their order
+        for (const image of images) {
+            const cacheKey = `dropbox:${downloadUrl}#${image.name}`;
+            let stored = cache.get(cacheKey);
+
+            if (!stored) {
+                stored = this.storeImage(
+                    ctx,
+                    image.data,
+                    image.imageType as string,
+                    imageFileName(
+                        productSlug,
+                        createHash('sha1')
+                            .update(cacheKey)
+                            .digest('hex')
+                            .slice(0, 12),
+                    ),
+                    true,
+                ).catch(error => ({
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unknown image import error',
+                }));
+                cache.set(cacheKey, stored);
+            }
+
+            const imported = await stored;
+
+            if (imported.assetId !== undefined) {
+                result.assetIds.push(imported.assetId);
+            }
+
+            if (imported.error) {
+                result.errors.push({
+                    file: image.name,
+                    error: imported.error,
+                });
+            }
+        }
+
+        return result;
     }
 
     private importCached(
@@ -374,6 +551,8 @@ export class OpnAssetService {
      * - Drive folder: its JPEG and PNG files (subfolders included), with
      *   files named "front" first
      * - Drive file link: that file
+     * - Dropbox folder: its JPEG and PNG files, "front" first
+     * - Dropbox file link: that file
      * - any other link: the image it points to
      */
     async importImagesFromLink(
@@ -382,12 +561,25 @@ export class OpnAssetService {
         productSlug: string,
         cache: ImageImportCache,
     ): Promise<LinkImportResult> {
-            const normalizedLink = normalizeDropboxImageUrl(link);
-            const drive = parseDriveLink(normalizedLink);
         const result: LinkImportResult = {
             assetIds: [],
             errors: [],
         };
+
+        const dropbox = parseDropboxLink(link);
+
+        if (dropbox?.kind === 'folder') {
+            return this.importDropboxFolder(
+                ctx,
+                dropbox.downloadUrl,
+                productSlug,
+                cache,
+                result,
+            );
+        }
+
+        const normalizedLink = dropbox?.downloadUrl ?? link.trim();
+        const drive = parseDriveLink(normalizedLink);
 
         const add = (
             imported: AssetImportResult,

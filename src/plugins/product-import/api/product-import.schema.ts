@@ -5,6 +5,8 @@ export const productImportSchema = gql`
     type ProductImportResult {
         products: Int!
         variants: Int!
+        "Products that already existed and are (or would be) rewritten from the sheet"
+        updatedProducts: Int!
         issues: [ProductImportIssue!]!
         "Path of the import log, relative to the backend folder"
         logFile: String

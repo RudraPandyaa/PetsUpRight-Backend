@@ -15,6 +15,7 @@ const previewQuery = graphql(`query PreviewProductSheet($rows: JSON!) {
     previewProductImport(rows: $rows) {
         products
         variants
+        updatedProducts
         issues { row message }
     }
 }`);
@@ -23,6 +24,7 @@ const importMutation = graphql(`mutation ImportProductSheet($rows: JSON!, $fileN
     importProductsFromSheet(rows: $rows, fileName: $fileName) {
         products
         variants
+        updatedProducts
         issues { row message }
         logFile
     }
@@ -31,6 +33,7 @@ const importMutation = graphql(`mutation ImportProductSheet($rows: JSON!, $fileN
 type Result = {
     products: number;
     variants: number;
+    updatedProducts: number;
     issues: { row: number; message: string }[];
     logFile?: string | null;
 };
@@ -46,6 +49,8 @@ function normalizeExcelHeader(value: unknown): string {
 
 const productHeaderNames = new Set([
     'productname',
+    // Product master template
+    'producttitle',
     'opnproductname',
     'opnproducttitle',
     'productdescription',
@@ -109,6 +114,20 @@ function parseOPNSheet(
     sheet: XLSX.WorkSheet,
     sheetName: string,
 ): WorkbookRow[] {
+    // Excel shows long numbers such as barcodes as "4.00843E+12", which
+    // loses digits; such cells are read with all their digits instead
+    for (const [address, cell] of Object.entries(sheet)) {
+        const value = cell as XLSX.CellObject;
+
+        if (
+            !address.startsWith('!') &&
+            value?.t === 'n' &&
+            /e[+-]?\d/i.test(String(value.w ?? ''))
+        ) {
+            value.w = String(value.v);
+        }
+    }
+
     const matrix =
         XLSX.utils.sheet_to_json<unknown[]>(sheet, {
             header: 1,
@@ -388,6 +407,9 @@ export function ImportProductsPage() {
             // skipped, so show what was created and what was not.
             toast.success(
                 `Created ${result.products} products and ${result.variants} variants` +
+                (result.updatedProducts
+                    ? `, updated ${result.updatedProducts} existing products`
+                    : '') +
                 (result.issues.length
                     ? ` (${result.issues.length} issues, see below)`
                     : ''),
@@ -417,10 +439,15 @@ export function ImportProductsPage() {
                 >
                     <div className="space-y-4">
                         <p>
-                            One row per variant. Prices are in rupees. Products
-                            are saved one by one. Rows with problems and
-                            products whose slug or SKU already exists are
-                            skipped, and a log file lists every skipped row.
+                            One row per variant. Prices are in rupees. Both the
+                            OPN listing sheets and the product master template
+                            (Brand, UPC/EAN Code, SKU, Product Title, ...) are
+                            read; image links can be Google Drive or Dropbox
+                            files or folders. Products are saved one by one.
+                            Products that already exist (same slug, SKU or
+                            barcode) are rewritten from the sheet, images
+                            included. Rows with problems are skipped, and a
+                            log file lists every row.
                         </p>
 
                         <div className="flex flex-wrap items-center gap-3">
@@ -469,8 +496,11 @@ export function ImportProductsPage() {
                                 <p>
                                     {preview.products} products and{' '}
                                     {preview.variants} variants can be
-                                    imported. {preview.issues.length} rows
-                                    have problems and will be skipped.
+                                    imported
+                                    {preview.updatedProducts > 0 &&
+                                        ` (${preview.updatedProducts} of the products already exist and will be rewritten, images included)`}
+                                    . {preview.issues.length} rows have
+                                    problems and will be skipped.
                                 </p>
 
                                 <IssueList issues={preview.issues} />
@@ -502,6 +532,8 @@ export function ImportProductsPage() {
                                 <p>
                                     Created {imported.products} products
                                     and {imported.variants} variants.{' '}
+                                    {imported.updatedProducts > 0 &&
+                                        `Updated ${imported.updatedProducts} existing products. `}
                                     {imported.issues.length} issues.
                                 </p>
 

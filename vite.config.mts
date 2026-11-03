@@ -27,7 +27,8 @@ export default defineConfig({
             // the Vite dev server can reach the Vendure backend.
             api: process.env.NODE_ENV === 'production'
                 ? { host: 'auto', port: 'auto' }
-                : { host: 'http://localhost', port: 3001 },
+                // DASHBOARD_API_PORT when the backend runs on another port
+                : { host: 'http://localhost', port: Number(process.env.DASHBOARD_API_PORT) || 3001 },
             // When you start the Vite server, your Admin API schema will
             // be introspected and the types will be generated in this location.
             // These types can be used in your dashboard extensions to provide

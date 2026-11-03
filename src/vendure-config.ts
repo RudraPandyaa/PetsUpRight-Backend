@@ -81,6 +81,9 @@ export const config: VendureConfig = {
             origin: [
                 'http://127.0.0.1:5173',
                 'http://localhost:5173',
+                // Dashboard dev server when 5173 is taken
+                'http://127.0.0.1:5174',
+                'http://localhost:5174',
                 'http://localhost:3001',
                 'http://127.0.0.1:3001',
                 'http://localhost:3000'
@@ -123,10 +126,11 @@ export const config: VendureConfig = {
         extra: {
           max: Number(process.env.DATABASE_POOL_SIZE) || 10,
           connectionTimeoutMillis: 10000,
-          // A new TLS connection to the hosted database takes ~0.4s, so idle
-          // connections are kept for a while instead of being reopened after
-          // every quiet half minute
-          idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS) || 300000,
+          // Idle connections are closed after 30s: Supabase's session pooler
+          // allows only 15 clients for the server, the worker and backups
+          // together. A longer value saves reconnecting (~0.4s) where the
+          // database has room for it.
+          idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS) || 30000,
           keepAlive: true,
         },
       }

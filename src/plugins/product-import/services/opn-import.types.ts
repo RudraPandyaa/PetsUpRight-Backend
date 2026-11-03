@@ -56,6 +56,9 @@ export type OPNImportRow = {
     // Price and stock
     price: number;
     stock: number;
+    // False when the sheet marks the row as not active; such variants are
+    // imported but not sold
+    active: boolean;
 
     // Variant measurements
     weightOrCount: number | null;
