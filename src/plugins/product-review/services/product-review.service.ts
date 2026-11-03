@@ -138,6 +138,65 @@ export class ProductReviewService {
             countMap.set(Number(row.rating), Number(row.count));
         }
 
+        return this.buildRatingSummary(productId, countMap);
+    }
+
+    /**
+     * Returns the approved rating summaries for many products with one
+     * query, in the order of productIds. Used by product lists.
+     */
+    async getRatingSummaries(
+        ctx: RequestContext,
+        productIds: ID[],
+    ): Promise<ProductRatingSummary[]> {
+        // Product lists show at most a few pages of cards
+        const uniqueIds = [...new Set(productIds.map(String))].slice(0, 200);
+
+        if (!uniqueIds.length) {
+            return [];
+        }
+
+        const rawCounts: Array<{
+            productId: string;
+            rating: string;
+            count: string;
+        }> = await this.connection
+            .getRepository(ctx, ProductReview)
+            .createQueryBuilder('review')
+            .select('review.productId', 'productId')
+            .addSelect('review.rating', 'rating')
+            .addSelect('COUNT(review.id)', 'count')
+            .where('review.productId IN (:...productIds)', {
+                productIds: uniqueIds,
+            })
+            .andWhere('review.status = :status', {
+                status: ProductReviewStatus.APPROVED,
+            })
+            .groupBy('review.productId')
+            .addGroupBy('review.rating')
+            .getRawMany();
+
+        const countMaps = new Map<string, Map<number, number>>();
+
+        for (const row of rawCounts) {
+            const productId = String(row.productId);
+            const countMap = countMaps.get(productId) ?? new Map<number, number>();
+            countMap.set(Number(row.rating), Number(row.count));
+            countMaps.set(productId, countMap);
+        }
+
+        return uniqueIds.map(productId =>
+            this.buildRatingSummary(
+                productId,
+                countMaps.get(productId) ?? new Map<number, number>(),
+            ),
+        );
+    }
+
+    private buildRatingSummary(
+        productId: ID,
+        countMap: Map<number, number>,
+    ): ProductRatingSummary {
         const ratingCounts: RatingCount[] = [5, 4, 3, 2, 1].map(rating => ({
             rating,
             count: countMap.get(rating) ?? 0,

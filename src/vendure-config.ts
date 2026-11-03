@@ -27,6 +27,7 @@ import { CmsPlugin } from "./plugins/cms/cms.plugin";
 import { razorpayPaymentHandler } from "./plugins/razorpay/razorpay-payment-handler";
 import { RazorpayPlugin } from "./plugins/razorpay/razorpay.plugin";
 import { json } from 'body-parser';
+import { shopApiCachePlugin } from './plugins/shop-api-cache/shop-api-cache';
 const IS_DEV = process.env.APP_ENV === "dev";
 const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
 import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
@@ -57,6 +58,8 @@ export const config: VendureConfig = {
     adminApiPath: "admin-api",
     shopApiPath: "shop-api",
     trustProxy: IS_DEV ? false : 1,
+    // Answers repeated catalog queries from memory, see the plugin file
+    apolloServerPlugins: [shopApiCachePlugin],
     // The following options are useful in development mode,
     // but are best turned off for production for security
     // reasons.
@@ -120,7 +123,11 @@ export const config: VendureConfig = {
         extra: {
           max: Number(process.env.DATABASE_POOL_SIZE) || 10,
           connectionTimeoutMillis: 10000,
-          idleTimeoutMillis: 30000,
+          // A new TLS connection to the hosted database takes ~0.4s, so idle
+          // connections are kept for a while instead of being reopened after
+          // every quiet half minute
+          idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS) || 300000,
+          keepAlive: true,
         },
       }
     : {
