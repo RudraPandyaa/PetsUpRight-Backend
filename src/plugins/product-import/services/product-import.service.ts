@@ -397,6 +397,34 @@ export class ProductImportService {
                         },
                     });
 
+                    const imageLinks = new Map<
+                        string,
+                        { row: OPNImportRow; cell: OPNSourceCell }
+                    >();
+
+                    for (const row of productRows) {
+                        for (const cell of row.imageCells) {
+                            if (!imageLinks.has(cell.value)) {
+                                imageLinks.set(cell.value, { row, cell });
+                            }
+                        }
+                    }
+
+                    if (imageLinks.size) {
+                        const first = productRows[0];
+
+                        imageQueue.add(() =>
+                            this.importProductImages(
+                                ctx,
+                                productId,
+                                first.productSlug,
+                                [...imageLinks.values()],
+                                imageCache,
+                                issues,
+                            ),
+                        );
+                    }
+
                     for (const collectionId of taxonomy.collectionIds) {
                         affectedCollectionIds.add(collectionId);
                     }

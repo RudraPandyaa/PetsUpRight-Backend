@@ -49,6 +49,21 @@ const extensionByMimeType: Record<string, string> = {
     'image/gif': '.gif',
 };
 
+function normalizeDropboxImageUrl(value: string): string {
+    const url = new URL(value.trim());
+
+    if (
+        url.hostname === 'dropbox.com' ||
+        url.hostname === 'www.dropbox.com'
+    ) {
+        url.searchParams.delete('dl');
+        url.searchParams.set('raw', '1');
+    }
+
+    return url.toString();
+}
+
+
 /** The image type of a file, judged by its first bytes. */
 function detectImageType(buffer: Buffer): string | undefined {
     if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) {
@@ -367,6 +382,8 @@ export class OpnAssetService {
         productSlug: string,
         cache: ImageImportCache,
     ): Promise<LinkImportResult> {
+            const normalizedLink = normalizeDropboxImageUrl(link);
+            const drive = parseDriveLink(normalizedLink);
         const result: LinkImportResult = {
             assetIds: [],
             errors: [],
@@ -388,19 +405,18 @@ export class OpnAssetService {
             }
         };
 
-        const drive = parseDriveLink(link);
 
         if (!drive) {
             add(
                 await this.importCached(
                     ctx,
                     cache,
-                    link,
-                    link,
+                    normalizedLink,
+                    normalizedLink,
                     imageFileName(
                         productSlug,
                         createHash('sha1')
-                            .update(link)
+                            .update(normalizedLink)
                             .digest('hex')
                             .slice(0, 12),
                     ),
