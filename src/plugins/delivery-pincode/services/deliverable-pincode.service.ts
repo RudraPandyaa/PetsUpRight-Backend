@@ -56,6 +56,23 @@ export class DeliverablePincodeService {
         return (await this.repository(ctx).count({ where: { code } })) > 0;
     }
 
+    async isAhmedabadManualDelivery(
+        ctx: RequestContext,
+        pincode: string | null | undefined,
+    ): Promise<boolean> {
+        const code = normalizePincode(pincode);
+
+        if (!isValidPincode(code)) {
+            return false;
+        }
+
+        const entry = await this.repository(ctx).findOne({
+            where: { code },
+        });
+
+        return entry?.area?.trim().toLowerCase() === 'ahmedabad';
+    }
+
     async checkDeliverability(
         ctx: RequestContext,
         pincode: string,

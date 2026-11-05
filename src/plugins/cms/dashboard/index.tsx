@@ -499,7 +499,8 @@ defineDashboardExtension({
                                         messageTitle: 'More care in every little moment.',
                                         messageSubtitle: 'Better choices for healthier and happier pets.',
                                         messageTags: ['Premium quality', 'Pet friendly', 'Everyday essentials'],
-                                        
+                                        showcaseLink: '/shop?collection=dog',
+                                        showcaseButtonLabel: 'Shop dog products',
                                 careItems: [
                                     {
                                     title: 'Premium Grooming',
@@ -1010,6 +1011,9 @@ defineDashboardExtension({
                                     showcaseTitle: draft.showcaseTitle ?? '',
                                     showcaseTitleAccent: draft.showcaseTitleAccent ?? '',
                                     showcaseDescription: draft.showcaseDescription ?? '',
+                                    showcaseLink: draft.showcaseLink ?? '/shop?collection=dog',
+                                    showcaseButtonLabel:
+                                        draft.showcaseButtonLabel ?? 'Shop dog products',
                                     showcasePoints: draft.showcasePoints ?? [],
                                     visualWords: draft.visualWords ?? [],
                                     showcaseImage: draft.showcaseImage ?? '',
@@ -1495,6 +1499,8 @@ defineDashboardExtension({
                                                                     ['showcaseTitle', 'Showcase title'],
                                                                     ['showcaseTitleAccent', 'Showcase title accent'],
                                                                     ['showcaseDescription', 'Showcase description'],
+                                                                    ['showcaseLink', 'Showcase link'],
+                                                                    ['showcaseButtonLabel', 'Showcase button text'],
                                                                     ['showcaseImage', 'Showcase image URL/path'],
                                                                     ['showcaseImageAlt', 'Showcase image alt text'],
                                                                     ['visualNoteTitle', 'Visual note title'],
@@ -1607,10 +1613,14 @@ defineDashboardExtension({
                                                                             >
                                                                                 <p className="font-medium">Card {itemIndex + 1}</p>
 
-                                                                                {(['title', 'description', 'image'] as const).map(field => (
+                                                                                {(['title', 'description', 'image', 'buttonLabel'] as const).map(field => (
                                                                                     <div key={field} className="space-y-1">
                                                                                         <Label>
-                                                                                            {field === 'image' ? 'Image URL/path' : field}
+                                                                                            {field === 'image'
+                                                                                                ? 'Image URL/path'
+                                                                                                : field === 'buttonLabel'
+                                                                                                ? 'Button text'
+                                                                                                : field}
                                                                                         </Label>
 
                                                                                         <Input

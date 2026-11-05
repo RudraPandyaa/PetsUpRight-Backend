@@ -31,6 +31,12 @@ import { shopApiCachePlugin } from './plugins/shop-api-cache/shop-api-cache';
 const IS_DEV = process.env.APP_ENV === "dev";
 const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
 import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
+import {
+    ahmedabadManualChecker,
+    ahmedabadManualCalculator,
+    shiprocketChecker,
+    shiprocketCalculator,
+} from './shipping/shipping-operations';
 
 import { HealthPlugin } from './plugins/health/health.plugin'
 // TLS for hosted databases. Supabase and similar use their own certificate
@@ -153,11 +159,18 @@ export const config: VendureConfig = {
   paymentOptions: {
     paymentMethodHandlers: [razorpayPaymentHandler],
   },
-  shippingOptions: {
-    shippingEligibilityCheckers: [defaultShippingEligibilityChecker],
-
-    shippingCalculators: [defaultShippingCalculator],
-  },
+    shippingOptions: {
+        shippingEligibilityCheckers: [
+            defaultShippingEligibilityChecker,
+            ahmedabadManualChecker,
+            shiprocketChecker,
+        ],
+        shippingCalculators: [
+            defaultShippingCalculator,
+            ahmedabadManualCalculator,
+            shiprocketCalculator,
+        ],
+    },
   promotionOptions: {
     promotionActions: [...defaultPromotionActions],
     promotionConditions: [...defaultPromotionConditions],
@@ -304,6 +317,26 @@ export const config: VendureConfig = {
                     value: 'Client Item Code',
                 },
             ],
+        },
+        {
+            name: 'shippingWeightGrams',
+            type: 'int',
+            nullable: true,
+            label: [
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Shipping weight (grams)',
+                },
+            ],
+            description: [
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Packed weight of one variant in grams, used for courier rates.',
+                },
+            ],
+            ui: {
+                component: 'number-form-input',
+            },
         },
           {
               name: 'barcode',

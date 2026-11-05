@@ -15,6 +15,7 @@ import {
 import { deliverablePincodeOrderProcess } from './deliverable-pincode-order-process';
 import { DeliverablePincode } from './entities/deliverable-pincode.entity';
 import { DeliverablePincodeService } from './services/deliverable-pincode.service';
+import { ShiprocketService } from './services/shiprocket.service';
 
 /**
  * Deliverable pincodes: the admin manages the list in the dashboard
@@ -26,7 +27,7 @@ import { DeliverablePincodeService } from './services/deliverable-pincode.servic
 
     entities: [DeliverablePincode],
 
-    providers: [DeliverablePincodeService],
+    providers: [DeliverablePincodeService, ShiprocketService],
 
     shopApiExtensions: {
         schema: shopApiExtensions,
