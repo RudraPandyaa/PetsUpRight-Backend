@@ -68,7 +68,20 @@ export const razorpayPaymentHandler =
             const razorpayOrderId = metadata?.razorpay_order_id;
             const razorpayPaymentId = metadata?.razorpay_payment_id;
             const razorpaySignature = metadata?.razorpay_signature;
-
+            if (
+                razorpay.isTestPaymentEnabled() &&
+                metadata?.test_payment === true
+            ) {
+                return {
+                    amount,
+                    state: 'Settled',
+                    transactionId: `TEST-${order.code}`,
+                    metadata: {
+                        testPayment: true,
+                        public: { testPayment: true },
+                    },
+                };
+            }
             if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
                 return declined(amount, 'Missing Razorpay payment information');
             }

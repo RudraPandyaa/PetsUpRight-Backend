@@ -37,7 +37,6 @@ import {
     shiprocketChecker,
     shiprocketCalculator,
 } from './shipping/shipping-operations';
-
 import { HealthPlugin } from './plugins/health/health.plugin'
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
@@ -471,6 +470,63 @@ export const config: VendureConfig = {
               ],
           },
       ],
+                        Fulfillment: [
+                    {
+                        name: 'shiprocketOrderId',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Order ID',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketShipmentId',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Shipment ID',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketAwbCode',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket AWB Code',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketCourierName',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Courier',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketStatus',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Status',
+                            },
+                        ],
+                    },
+                ],
   },
   plugins: [
     GraphiqlPlugin.init(),

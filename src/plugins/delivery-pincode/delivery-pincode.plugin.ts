@@ -16,19 +16,22 @@ import { deliverablePincodeOrderProcess } from './deliverable-pincode-order-proc
 import { DeliverablePincode } from './entities/deliverable-pincode.entity';
 import { DeliverablePincodeService } from './services/deliverable-pincode.service';
 import { ShiprocketService } from './services/shiprocket.service';
+import { shiprocketFulfillmentHandler } from './shiprocket-fulfillment.handler';
+import { ShiprocketTrackingController } from './shiprocket-tracking.controller';
+
 
 /**
  * Deliverable pincodes: the admin manages the list in the dashboard
  * (Settings > Deliverable Pincodes), the storefront can check a pincode,
  * and orders outside the list cannot go to payment.
  */
-@VendurePlugin({
+@VendurePlugin({    
     imports: [PluginCommonModule],
 
     entities: [DeliverablePincode],
 
     providers: [DeliverablePincodeService, ShiprocketService],
-
+    controllers: [ShiprocketTrackingController],
     shopApiExtensions: {
         schema: shopApiExtensions,
         resolvers: [DeliverablePincodeShopResolver],
@@ -40,11 +43,17 @@ import { ShiprocketService } from './services/shiprocket.service';
     },
 
     configuration: config => {
-        const process = config.orderOptions.process ?? [defaultOrderProcess];
+        const orderProcesses =
+            config.orderOptions.process ?? [defaultOrderProcess];
 
         config.orderOptions.process = [
-            ...process,
+            ...orderProcesses,
             deliverablePincodeOrderProcess,
+        ];
+
+        config.shippingOptions.fulfillmentHandlers = [
+            ...(config.shippingOptions.fulfillmentHandlers ?? []),
+            shiprocketFulfillmentHandler,
         ];
 
         return config;

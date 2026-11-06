@@ -11,8 +11,8 @@ const shopApiExtensions = gql`
         currency: String!
         receipt: String
         status: String
+        testMode: Boolean!
     }
-
     extend type Mutation {
     createRazorpayOrder: RazorpayOrder!
 }

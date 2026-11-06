@@ -17,6 +17,13 @@ export class RazorpayService {
         );
     }
 
+    isTestPaymentEnabled(): boolean {
+        return (
+            process.env.NODE_ENV !== 'production' &&
+            process.env.ALLOW_TEST_PAYMENT?.trim().toLowerCase() === 'true'
+        );
+    }
+
     keySecret(): string {
         const secret = process.env.RAZORPAY_KEY_SECRET?.trim();
 

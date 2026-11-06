@@ -29,39 +29,60 @@ export class RazorpayResolver {
     async createRazorpayOrder(
         @Ctx() ctx: RequestContext,
     ) {
-        if (!this.razorpayService.isConfigured()) {
-            throw new UserInputError('Online payment is not available yet. Please try again later.');
-        }
+const order =
+    await this.activeOrderService.getOrderFromContext(ctx);
 
-        const order =
-            await this.activeOrderService.getOrderFromContext(ctx);
+if (!order) {
+    throw new UserInputError('No active order found');
+}
 
-        if (!order) {
-            throw new UserInputError('No active order found');
-        }
+if (order.state !== 'ArrangingPayment') {
+    throw new UserInputError('The order is not ready for payment');
+}
 
-        if (order.state !== 'ArrangingPayment') {
-            throw new UserInputError('The order is not ready for payment');
-        }
+if (order.totalWithTax <= 0) {
+    throw new UserInputError('Order total must be greater than 0');
+}
 
-        if (order.totalWithTax <= 0) {
-            throw new UserInputError('Order total must be greater than 0');
-        }
+if (this.razorpayService.isTestPaymentEnabled()) {
+    return {
+        id: `test_${order.code}`,
+        amount: order.totalWithTax,
+        currency: 'INR',
+        receipt: order.code,
+        status: 'test',
+        testMode: true,
+    };
+}
 
-        try {
-            return await this.razorpayService.createOrder(
-                order.totalWithTax,
-                order.code,
-            );
-        } catch (error: any) {
-            // e.g. wrong keys (401 Authentication failed); details stay in the log
-            Logger.error(
-                `Could not create Razorpay order for ${order.code}: ` +
-                    (error?.error?.description ?? error?.message ?? JSON.stringify(error)),
-                'Razorpay',
-            );
+if (!this.razorpayService.isConfigured()) {
+    throw new UserInputError(
+        'Online payment is not available yet. Please try again later.',
+    );
+}
 
-            throw new UserInputError('Online payment is not available right now. Please try again later.');
-        }
+try {
+    const razorpayOrder = await this.razorpayService.createOrder(
+        order.totalWithTax,
+        order.code,
+    );
+
+    return {
+        ...razorpayOrder,
+        testMode: false,
+    };
+} catch (error: any) {
+    Logger.error(
+        `Could not create Razorpay order for ${order.code}: ` +
+            (error?.error?.description ??
+                error?.message ??
+                JSON.stringify(error)),
+        'Razorpay',
+    );
+
+    throw new UserInputError(
+        'Online payment is not available right now. Please try again later.',
+    );
+}
     }
 }

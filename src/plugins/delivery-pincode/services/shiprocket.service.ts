@@ -30,17 +30,45 @@ export interface ShiprocketCourierOption {
     estimatedDeliveryDays: number | null;
 }
 
+export interface ShiprocketCreatedOrder {
+    order_id: number;
+    shipment_id: number;
+    status: string;
+    awb_code?: string | null;
+    courier_company_id?: number | null;
+    courier_name?: string | null;
+}
+
 @Injectable()
 export class ShiprocketService {
     private token: string | null = null;
     private tokenExpiresAt = 0;
     private tokenRequest: Promise<string> | null = null;
+    private isMockMode(): boolean {
+        const enabled =
+            process.env.SHIPROCKET_MOCK_MODE?.trim().toLowerCase() === 'true';
 
+        if (enabled && process.env.NODE_ENV === 'production') {
+            throw new Error('SHIPROCKET_MOCK_MODE cannot be enabled in production');
+        }
+
+        return enabled;
+    }
     async getCourierOptions(input: {
         deliveryPincode: string;
         weightKg: number;
         cod: boolean;
     }): Promise<ShiprocketCourierOption[]> {
+        if (this.isMockMode()) {
+            return [{
+                courierId: 999999,
+                courierName: 'MOCK Courier',
+                rate: 177.72,
+                estimatedDelivery: 'Mock ETA',
+                estimatedDeliveryDays: 3,
+            }];
+        }
+
         const pickupPincode = this.requiredEnv(
             'SHIPROCKET_PICKUP_POSTCODE',
         );
@@ -97,6 +125,148 @@ export class ShiprocketService {
                     Number.isFinite(courier.rate) && courier.rate >= 0,
             )
             .sort((a, b) => a.rate - b.rate);
+    }
+
+    async createAdhocOrder(
+        payload: Record<string, unknown>,
+    ): Promise<ShiprocketCreatedOrder> {
+        if (this.isMockMode()) {
+            return {
+                order_id: 900000001,
+                shipment_id: 800000001,
+                status: 'MOCK_NEW',
+                awb_code: null,
+                courier_company_id: null,
+                courier_name: null,
+            };
+        }
+        const token = await this.getToken();
+
+        const response = await this.fetchWithTimeout(
+            `${SHIPROCKET_API}/orders/create/adhoc`,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            },
+        );
+
+        const body = (await response.json()) as
+            Partial<ShiprocketCreatedOrder> & { message?: string };
+
+        if (!response.ok || !body.order_id || !body.shipment_id) {
+            throw new Error(
+                `Shiprocket order creation failed (${response.status}): ${
+                    body.message ?? JSON.stringify(body)
+                }`,
+            );
+        }
+
+        return body as ShiprocketCreatedOrder;
+    }
+
+    
+
+    async assignAwb(
+    shipmentId: number,
+    courierId: number,
+): Promise<Record<string, unknown>> {
+    if (this.isMockMode()) {
+        return {
+            awb_assign_status: 1,
+            response: {
+                data: {
+                    shipment_id: shipmentId,
+                    awb_code: `MOCK-AWB-${shipmentId}-${Date.now()}-${Math.random()
+                        .toString(36)
+                        .slice(2, 8)}`,
+                    courier_company_id: courierId,
+                    courier_name: 'MOCK Courier',
+                },
+            },
+        };
+    }
+
+    return this.postJson('/courier/assign/awb', {
+        shipment_id: shipmentId,
+        courier_id: courierId,
+    });
+    }
+
+    async requestPickup(shipmentId: number): Promise<Record<string, unknown>> {
+        if (this.isMockMode()) {
+            return {
+                pickup_status: 1,
+                shipment_id: shipmentId,
+                status: 'MOCK_PICKUP_SCHEDULED',
+            };
+        }
+
+        return this.postJson('/courier/generate/pickup', {
+            shipment_id: [shipmentId],
+        });
+    }
+
+    async getTracking(shipmentId: number): Promise<Record<string, unknown>> {
+        if (this.isMockMode()) {
+            return {
+                shipment_id: shipmentId,
+                status: 'MOCK_IN_TRANSIT',
+                isMock: true,
+            };
+        }
+
+        const token = await this.getToken();
+        const response = await this.fetchWithTimeout(
+            `${SHIPROCKET_API}/courier/track/shipment/${shipmentId}`,
+            {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/json',
+                },
+            },
+        );
+
+        const body = (await response.json()) as Record<string, unknown>;
+
+        if (!response.ok) {
+            throw new Error(
+                `Shiprocket tracking failed (${response.status}): ${JSON.stringify(body)}`,
+            );
+        }
+
+        return body;
+    }
+
+    private async postJson(
+        path: string,
+        payload: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+        const token = await this.getToken();
+        const response = await this.fetchWithTimeout(`${SHIPROCKET_API}${path}`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const body = (await response.json()) as Record<string, unknown>;
+
+        if (!response.ok) {
+            throw new Error(
+                `Shiprocket request failed (${response.status}): ${JSON.stringify(body)}`,
+            );
+        }
+
+        return body;
     }
 
     private async getToken(): Promise<string> {
