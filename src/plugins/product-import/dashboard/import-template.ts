@@ -175,6 +175,14 @@ export const TEMPLATE_COLUMNS: TemplateColumn[] = [
         width: 9,
     },
     {
+        header: 'Shipping Weight (g)',
+        need: 'Recommended',
+        help:
+            'Actual packed weight of one variant in grams, including its packaging. ' +
+            'Required for Shiprocket delivery.',
+        width: 22,
+    },
+    {
         header: 'Packing',
         need: 'Optional',
         help: 'e.g. Bag, Pouch, Can, Bottle, Box. Shown as a filter.',

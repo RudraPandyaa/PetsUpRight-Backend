@@ -899,6 +899,7 @@ export class ProductImportService {
             packing: row.packing || undefined,
             hsnCode: row.hsnCode || undefined,
             gstPercentage: row.gstPercentage ?? undefined,
+            shippingWeightGrams: row.shippingWeightGrams ?? undefined,
             casePack: row.casePack ?? undefined,
             shelfLifeYears: row.shelfLifeYears ?? undefined,
             packageLengthCm: row.packageLengthCm ?? undefined,

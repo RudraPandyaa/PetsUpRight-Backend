@@ -1,0 +1,74 @@
+<mjml>
+    <mj-head>
+        <mj-title>Your order has been delivered</mj-title>
+        <mj-preview>Order #{{order.code}} has been delivered.</mj-preview>
+        <mj-attributes>
+            <mj-all font-family="Arial, Helvetica, sans-serif" />
+            <mj-text color="#55566f" font-size="14px" line-height="1.6" />
+        </mj-attributes>
+    </mj-head>
+
+    <mj-body background-color="#f7f5fa" width="600px">
+        <mj-section background-color="#ffffff" padding="28px 20px">
+            <mj-column>
+                <mj-image
+                    src="{{emailLogoUrl}}"
+                    alt="PetsUpRight logo"
+                    width="150px"
+                    align="center"
+                    padding="0"
+                />
+            </mj-column>
+        </mj-section>
+
+        <mj-section background-color="#f7f5fa" padding="20px">
+            <mj-column background-color="#ffffff" border-radius="16px" padding="28px 24px">
+                <mj-text align="center" color="#44476f" font-size="25px" font-weight="700">
+                    Order delivered!
+                </mj-text>
+                <mj-text align="center">
+                    Order <strong>#{{order.code}}</strong> has been delivered.
+                </mj-text>
+
+                <mj-divider border-color="#eceaf2" padding="12px 0" />
+
+                <mj-section background-color="#f7f5fa" border-radius="10px" padding="8px">
+                    <mj-column width="50%">
+                        <mj-text align="center" font-size="11px" color="#77778a">
+                            ORDER STATUS
+                        </mj-text>
+                        <mj-text align="center" font-weight="700" color="#32805a">
+                            DELIVERED
+                        </mj-text>
+                    </mj-column>
+                    <mj-column width="50%">
+                        <mj-text align="center" font-size="11px" color="#77778a">
+                            COURIER
+                        </mj-text>
+                        <mj-text align="center" font-weight="700" color="#44476f">
+                            {{fulfillment.customFields.shiprocketCourierName}}
+                        </mj-text>
+                    </mj-column>
+                </mj-section>
+
+                <mj-text padding-top="20px" font-weight="700" color="#44476f">
+                    TRACKING / AWB
+                </mj-text>
+                <mj-text background-color="#f7f5fa" border-radius="8px" padding="14px">
+                    {{fulfillment.trackingCode}}
+                </mj-text>
+                <mj-text align="center" color="#77778a" font-size="13px" padding-top="14px">
+                    Thank you for shopping with PetsUpRight.
+                </mj-text>
+            </mj-column>
+        </mj-section>
+
+        <mj-section padding="0 20px 20px">
+            <mj-column>
+                <mj-text align="center" color="#888899" font-size="12px">
+                    PetsUpRight · Made with care for your pets
+                </mj-text>
+            </mj-column>
+        </mj-section>
+    </mj-body>
+</mjml>

@@ -39,6 +39,54 @@ export interface ShiprocketCreatedOrder {
     courier_name?: string | null;
 }
 
+export interface ShiprocketOrderItem {
+    name: string;
+    sku: string;
+    units: number;
+    selling_price: number;
+    discount?: number;
+    tax?: number;
+    hsn?: string;
+}
+
+export interface ShiprocketAdhocOrderPayload {
+    order_id: string;
+    order_date: string; // YYYY-MM-DD
+    pickup_location: string;
+
+    billing_customer_name: string;
+    billing_last_name: string;
+    billing_address: string;
+    billing_address_2?: string;
+    billing_city: string;
+    billing_pincode: string;
+    billing_state: string;
+    billing_country: string;
+    billing_email: string;
+    billing_phone: string;
+
+    shipping_is_billing: boolean;
+    shipping_customer_name?: string;
+    shipping_last_name?: string;
+    shipping_address?: string;
+    shipping_address_2?: string;
+    shipping_city?: string;
+    shipping_pincode?: string;
+    shipping_state?: string;
+    shipping_country?: string;
+    shipping_email?: string;
+    shipping_phone?: string;
+
+    order_items: ShiprocketOrderItem[];
+    payment_method: 'Prepaid' | 'COD';
+    sub_total: number;
+
+    length: number;
+    breadth: number;
+    height: number;
+    weight: number;
+}
+
 @Injectable()
 export class ShiprocketService {
     private token: string | null = null;
@@ -128,7 +176,7 @@ export class ShiprocketService {
     }
 
     async createAdhocOrder(
-        payload: Record<string, unknown>,
+        payload: ShiprocketAdhocOrderPayload,
     ): Promise<ShiprocketCreatedOrder> {
         if (this.isMockMode()) {
             return {

@@ -600,6 +600,9 @@ export function parseOPNRows(
             weightInGrams: integerOrNull(
                 getValue(headers, 'weightInGrams'),
             ),
+            shippingWeightGrams: integerOrNull(
+                getValue(headers, 'shippingWeightGrams'),
+            ),
             packing: normalizeText(
                 getValue(headers, 'packing'),
             ),

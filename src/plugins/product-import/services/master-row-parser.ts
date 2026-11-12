@@ -136,6 +136,7 @@ export function parseMasterRow(
     const identity = createProductIdentity(brand, text('SKU') || title);
 
     const weightInGrams = integer('Gms');
+    const shippingWeightGrams = integer('Shipping Weight (g)');
     const variant =
         text('Variant') ||
         (weightInGrams !== null ? `${weightInGrams} g` : '');
@@ -177,6 +178,7 @@ export function parseMasterRow(
         ['petType', 'L2'],
         ['primaryCategory', 'L2'],
         ['hsnCode', 'HSN'],
+        ['shippingWeightGrams', 'Shipping Weight (g)'],
         ['gstPercentage', 'GST'],
         ['description', 'Product Description'],
         ['keyPoints', 'Product Features'],
@@ -245,6 +247,7 @@ export function parseMasterRow(
         weightOrCount: null,
         unit: '',
         weightInGrams,
+        shippingWeightGrams,
         packing: '',
 
         hsnCode: text('HSN'),
@@ -255,9 +258,9 @@ export function parseMasterRow(
                 ? null
                 : Math.round((shelfLifeDays / 365) * 100) / 100,
 
-        packageLengthCm: null,
-        packageWidthCm: null,
-        packageHeightCm: null,
+            packageLengthCm: optionalNumber(text('Package Length (cm)')),
+            packageWidthCm: optionalNumber(text('Package Width (cm)')),
+            packageHeightCm: optionalNumber(text('Package Height (cm)')),
 
         imageUrl: imageCells[0]?.value ?? '',
         imageCells,

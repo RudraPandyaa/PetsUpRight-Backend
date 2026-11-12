@@ -204,6 +204,12 @@ export const OPN_COLUMN_ALIASES = {
         'Ingredients',
     ],
 
+    shippingWeightGrams: [
+        'Shipping Weight (g)',
+        'Shipping Weight in Grams',
+        'Packed Weight (g)',
+    ],
+
     analyticalConstituents: [
         'Analytical Constituents',
         'Analytical Constitution',

@@ -64,6 +64,7 @@ export type OPNImportRow = {
     weightOrCount: number | null;
     unit: string;
     weightInGrams: number | null;
+    shippingWeightGrams: number | null;
     packing: string;
 
     // Tax and operational fields

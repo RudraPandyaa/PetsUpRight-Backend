@@ -31,6 +31,7 @@ import { shopApiCachePlugin } from './plugins/shop-api-cache/shop-api-cache';
 const IS_DEV = process.env.APP_ENV === "dev";
 const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
 import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
+import { shiprocketEmailHandlers } from './plugins/delivery-pincode/shiprocket-email.handlers';
 import {
     ahmedabadManualChecker,
     ahmedabadManualCalculator,
@@ -549,7 +550,7 @@ export const config: VendureConfig = {
     EmailPlugin.init({
       route: "mailbox",
 
-      handlers: defaultEmailHandlers,
+      handlers: [...defaultEmailHandlers, ...shiprocketEmailHandlers],
 
       templateLoader: new FileBasedTemplateLoader(
         path.join(__dirname, "../static/email/templates"),
@@ -568,6 +569,10 @@ export const config: VendureConfig = {
       },
 
       globalTemplateVars: {
+        emailLogoUrl:
+            process.env.EMAIL_LOGO_URL ??
+            'https://res.cloudinary.com/oyrw2mrv/image/upload/v1794475978/logo-png_e4vmy1.png',
+        storefrontUrl,
         fromAddress: process.env.SMTP_FROM,
         // Links in customer emails point to the storefront
         verifyEmailAddressUrl: `${storefrontUrl}/verify`,
