@@ -1,0 +1,59 @@
+<mjml>
+    <mj-head>
+        <mj-title>New order received</mj-title>
+        <mj-preview>New order #{{order.code}} received.</mj-preview>
+        <mj-attributes>
+            <mj-all font-family="Arial, Helvetica, sans-serif" />
+            <mj-text color="#55566f" font-size="14px" line-height="1.6" />
+        </mj-attributes>
+    </mj-head>
+    <mj-body background-color="#f7f5fa" width="600px">
+        <mj-section background-color="#ffffff" padding="24px">
+            <mj-column>
+                <mj-image src="{{emailLogoUrl}}" alt="PetsUpRight logo" width="120px" align="center" padding="0" />
+            </mj-column>
+            <mj-text>
+                <strong>Delivery type:</strong> {{deliveryType}}<br />
+                <strong>Shipping method:</strong> {{shippingMethodName}}
+            </mj-text>
+        </mj-section>
+        <mj-section padding="20px">
+            <mj-column background-color="#ffffff" border-radius="16px" padding="24px">
+                <mj-text align="center" color="#44476f" font-size="24px" font-weight="700">
+                    New order received
+                </mj-text>
+                <mj-text>
+                    Order <strong>#{{order.code}}</strong> was placed at {{order.placedAt}}.
+                </mj-text>
+                <mj-text>
+                    <strong>Customer:</strong> {{customer.name}}<br />
+                    <strong>Email:</strong> {{customer.email}}<br />
+                    <strong>Phone:</strong> {{customer.phone}}
+                </mj-text>
+                <mj-text>
+                    <strong>Delivery type:</strong> {{deliveryType}}<br />
+                    <strong>Shipping method:</strong> {{shippingMethodName}}
+                </mj-text>
+                <mj-divider border-color="#eceaf2" />
+                <mj-text font-weight="700" color="#44476f">ORDER ITEMS</mj-text>
+                <mj-table>
+                    <tr>
+                        <th align="left">Product</th>
+                        <th align="center">Qty</th>
+                        <th align="right">Amount</th>
+                    </tr>
+                    {{#each items}}
+                    <tr>
+                        <td>{{name}}<br /><small>{{sku}}</small></td>
+                        <td align="center">{{quantity}}</td>
+                        <td align="right">₹{{total}}</td>
+                    </tr>
+                    {{/each}}
+                </mj-table>
+                <mj-text align="right" font-size="17px" font-weight="700" color="#44476f">
+                    Order total: ₹{{order.total}}
+                </mj-text>
+            </mj-column>
+        </mj-section>
+    </mj-body>
+</mjml>

@@ -39,6 +39,7 @@ import {
     shiprocketCalculator,
 } from './shipping/shipping-operations';
 import { HealthPlugin } from './plugins/health/health.plugin'
+import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
 const databaseSsl =
@@ -550,7 +551,7 @@ export const config: VendureConfig = {
     EmailPlugin.init({
       route: "mailbox",
 
-      handlers: [...defaultEmailHandlers, ...shiprocketEmailHandlers],
+      handlers: [...defaultEmailHandlers, ...shiprocketEmailHandlers,     ...shiprocketAdminEmailHandlers],
 
       templateLoader: new FileBasedTemplateLoader(
         path.join(__dirname, "../static/email/templates"),
