@@ -49,7 +49,7 @@ const databaseSsl =
         rejectUnauthorized:
           process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
         ...(process.env.DATABASE_SSL_CA
-          ? { ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, "\n") }
+          ? { ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, '\n') }
           : {}),
       }
     : undefined;
