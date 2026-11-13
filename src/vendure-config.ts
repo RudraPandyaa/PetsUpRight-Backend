@@ -53,6 +53,11 @@ const databaseSsl =
           : {}),
       }
     : undefined;
+        console.log('[DB SSL]', {
+    enabled: !!databaseSsl,
+    rejectUnauthorized: databaseSsl?.rejectUnauthorized,
+    caConfigured: !!databaseSsl?.ca,
+    });
 // Public address of the storefront (Nuxt), used for links in emails
 const storefrontUrl = (process.env.STOREFRONT_URL || "http://localhost:3001").replace(/\/+$/, "");
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
