@@ -25,16 +25,25 @@ async function getWeightKg(
 
     if (!order.lines?.length) return undefined;
 
+    const defaultWeightGrams = Number(
+        process.env.SHIPROCKET_DEFAULT_WEIGHT_GRAMS ?? 500,
+    );
+
+    if (!Number.isFinite(defaultWeightGrams) || defaultWeightGrams <= 0) {
+        return undefined;
+    }
+
     let totalGrams = 0;
 
     for (const line of order.lines) {
-        const grams = Number(
+        const variantGrams = Number(
             (line.productVariant as any)?.customFields?.shippingWeightGrams,
         );
 
-        if (!Number.isFinite(grams) || grams <= 0) {
-            return undefined;
-        }
+        const grams =
+            Number.isFinite(variantGrams) && variantGrams > 0
+                ? variantGrams
+                : defaultWeightGrams;
 
         totalGrams += grams * line.quantity;
     }

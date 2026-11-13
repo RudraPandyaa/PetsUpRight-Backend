@@ -38,6 +38,7 @@ import {
     shiprocketChecker,
     shiprocketCalculator,
 } from './shipping/shipping-operations';
+import { orderCancellationEmailHandlers } from './plugins/delivery-pincode/order-cancellation-email.handlers';
 import { HealthPlugin } from './plugins/health/health.plugin'
 import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
 // TLS for hosted databases. Supabase and similar use their own certificate
@@ -321,6 +322,7 @@ export const config: VendureConfig = {
         },
         {
             name: 'shippingWeightGrams',
+            defaultValue: Number(process.env.SHIPROCKET_DEFAULT_WEIGHT_GRAMS ?? 500),
             type: 'int',
             nullable: true,
             label: [
@@ -551,7 +553,12 @@ export const config: VendureConfig = {
     EmailPlugin.init({
       route: "mailbox",
 
-      handlers: [...defaultEmailHandlers, ...shiprocketEmailHandlers,     ...shiprocketAdminEmailHandlers],
+      handlers: [
+    ...defaultEmailHandlers,
+    ...shiprocketEmailHandlers,
+    ...shiprocketAdminEmailHandlers,
+    ...orderCancellationEmailHandlers,
+    ],
 
       templateLoader: new FileBasedTemplateLoader(
         path.join(__dirname, "../static/email/templates"),

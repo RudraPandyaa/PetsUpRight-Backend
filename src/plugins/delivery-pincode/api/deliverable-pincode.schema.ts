@@ -9,12 +9,13 @@ const commonTypes = gql`
 `;
 
 export const shopApiExtensions = gql`
-    ${commonTypes}
+  ${commonTypes}
 
-    extend type Query {
-        "Whether orders can be delivered to the pincode"
-        checkPincodeDeliverability(pincode: String!): PincodeDeliverability!
-    }
+
+  extend type Query {
+    checkPincodeDeliverability(pincode: String!): PincodeDeliverability!
+  }
+
 `;
 
 export const adminApiExtensions = gql`

@@ -888,8 +888,33 @@ export class ProductImportService {
         };
     }
 
-    // Variant details stored in custom fields, from its row
-    private variantCustomFields(row: OPNImportRow) {
+    private defaultShippingWeightGrams(): number {
+        const raw = process.env.SHIPROCKET_DEFAULT_WEIGHT_GRAMS?.trim();
+        const grams = raw ? Number(raw) : 500;
+
+        if (!Number.isFinite(grams) || grams <= 0) {
+            throw new Error(
+                'SHIPROCKET_DEFAULT_WEIGHT_GRAMS must be a positive number.',
+            );
+        }
+
+        return grams;
+    }
+
+    private variantCustomFields(
+        row: OPNImportRow,
+        existingShippingWeightGrams?: number | null,
+    ) {
+        const rowWeight = row.shippingWeightGrams;
+        const currentWeight = Number(existingShippingWeightGrams);
+
+        const shippingWeightGrams =
+            rowWeight != null && Number.isFinite(rowWeight) && rowWeight > 0
+                ? rowWeight
+                : Number.isFinite(currentWeight) && currentWeight > 0
+                ? currentWeight
+                : this.defaultShippingWeightGrams();
+
         return {
             itemCode: row.itemCode || undefined,
             barcode: row.barcode || undefined,
@@ -899,7 +924,7 @@ export class ProductImportService {
             packing: row.packing || undefined,
             hsnCode: row.hsnCode || undefined,
             gstPercentage: row.gstPercentage ?? undefined,
-            shippingWeightGrams: row.shippingWeightGrams ?? undefined,
+            shippingWeightGrams,
             casePack: row.casePack ?? undefined,
             shelfLifeYears: row.shelfLifeYears ?? undefined,
             packageLengthCm: row.packageLengthCm ?? undefined,
@@ -1005,7 +1030,10 @@ export class ProductImportService {
                         name: row.variantName || row.productName,
                     },
                 ],
-                customFields: this.variantCustomFields(row),
+                customFields: this.variantCustomFields(
+                    row,
+                    (variant.customFields as any)?.shippingWeightGrams,
+                ),
             });
         }
 

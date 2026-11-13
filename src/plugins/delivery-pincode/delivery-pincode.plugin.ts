@@ -1,5 +1,6 @@
 import {
     defaultOrderProcess,
+    LanguageCode,
     PluginCommonModule,
     VendurePlugin,
 } from '@vendure/core';
@@ -55,7 +56,17 @@ import { ShiprocketTrackingController } from './shiprocket-tracking.controller';
             ...(config.shippingOptions.fulfillmentHandlers ?? []),
             shiprocketFulfillmentHandler,
         ];
-
+        config.customFields.Order.push({
+            name: 'originalTotalBeforeCancellation',
+            type: 'int',
+            nullable: true,
+            label: [
+                {
+                languageCode: LanguageCode.en,
+                value: 'Original total before cancellation',
+                },
+            ],
+            });
         return config;
     },
 

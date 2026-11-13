@@ -57,19 +57,24 @@ async function buildShiprocketPayload(
     if (!lines.length) {
         throw new Error('Cannot create a Shiprocket shipment for an empty order.');
     }
-
+    
+    
+    const defaultWeightGrams = positiveNumber(
+        process.env.SHIPROCKET_DEFAULT_WEIGHT_GRAMS,
+        500,
+        'SHIPROCKET_DEFAULT_WEIGHT_GRAMS',
+    );
     let totalWeightGrams = 0;
 
     const orderItems = lines.map(line => {
         const variant = line.productVariant as any;
         const customFields = variant?.customFields ?? {};
-        const grams = Number(customFields.shippingWeightGrams);
+        const variantWeightGrams = Number(customFields.shippingWeightGrams);
 
-        if (!Number.isFinite(grams) || grams <= 0) {
-            throw new Error(
-                `Shipping weight is missing for "${variant?.name ?? 'a product'}".`,
-            );
-        }
+        const grams =
+            Number.isFinite(variantWeightGrams) && variantWeightGrams > 0
+                ? variantWeightGrams
+                : defaultWeightGrams;
 
         totalWeightGrams += grams * line.quantity;
 

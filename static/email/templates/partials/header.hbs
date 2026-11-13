@@ -1,36 +1,26 @@
 <mjml>
-    <mj-head>
-        <mj-title>{{title}}</mj-title>
-        <mj-style inline="inline">
-            h3 {
-                font-size: 18px;
-                color: #555;
-                font-weight: normal;
-            }
-        </mj-style>
-    </mj-head>
+  <mj-head>
+    <mj-title>{{title}}</mj-title>
+    {{#if previewOrderCode}}
+      <mj-preview>{{previewPrefix}}#{{previewOrderCode}}{{previewSuffix}}</mj-preview>
+    {{/if}}
+    <mj-attributes>
+      <mj-all font-family="Arial, Helvetica, sans-serif" />
+      <mj-text color="#55566f" font-size="14px" line-height="1.6" />
+      <mj-section padding="0" />
+      <mj-column padding="0" />
+    </mj-attributes>
+  </mj-head>
 
-    <mj-body background-color="#ffffff">
-        <mj-section background-color="#ffffff" padding="25px 20px">
-            <mj-column>
-                <mj-raw>
-                    <table role="presentation" cellpadding="0" cellspacing="0"
-                        style="margin:0 auto;border-collapse:collapse;">
-                        <tr>
-                            <td style="vertical-align:middle;padding-right:10px;">
-                                <img
-                                    src="https://res.cloudinary.com/oyrw2mrv/image/upload/v1794475978/logo-png_e4vmy1.png"
-                                    alt="PetsUpRight"
-                                    width="48"
-                                    height="48"
-                                    style="display:block;width:48px;height:48px;border:0;"
-                                />
-                            </td>
-                            <td style="vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:700;color:#44476f;">
-                                PetsUpRight
-                            </td>
-                        </tr>
-                    </table>
-                </mj-raw>
-            </mj-column>
-        </mj-section>
+  <mj-body background-color="#f7f5fa" width="600px">
+    <mj-section background-color="#f7f5fa" padding="18px 16px 10px">
+      <mj-column>
+        <mj-image
+          src="{{emailLogoUrl}}"
+          alt="PetsUpRight"
+          width="150px"
+          align="center"
+          padding="0"
+        />
+      </mj-column>
+    </mj-section>
