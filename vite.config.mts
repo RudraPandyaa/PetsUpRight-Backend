@@ -5,6 +5,12 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
     base: '/dashboard',
+    server: {
+        // Listen on IPv4. On this machine Vite otherwise binds only to the IPv6
+        // address [::1], and browsers that resolve "localhost" to 127.0.0.1
+        // cannot open http://localhost:5173/dashboard.
+        host: '127.0.0.1',
+    },
     build: {
         outDir: join(__dirname, 'dist/dashboard'),
     },
@@ -21,7 +27,8 @@ export default defineConfig({
             // the Vite dev server can reach the Vendure backend.
             api: process.env.NODE_ENV === 'production'
                 ? { host: 'auto', port: 'auto' }
-                : { host: 'http://localhost', port: 3000 },
+                // DASHBOARD_API_PORT when the backend runs on another port
+                : { host: 'http://localhost', port: Number(process.env.DASHBOARD_API_PORT) || 3001 },
             // When you start the Vite server, your Admin API schema will
             // be introspected and the types will be generated in this location.
             // These types can be used in your dashboard extensions to provide

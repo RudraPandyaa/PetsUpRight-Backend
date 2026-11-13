@@ -1,0 +1,48 @@
+{{> header title="New order received" previewOrderCode=order.code previewPrefix="New order " previewSuffix=" received." }}
+
+<mj-section background-color="#f7f5fa" padding="0 16px 20px">
+  <mj-column background-color="#ffffff" border-radius="14px" padding="24px">
+    <mj-text align="center" color="#44476f" font-size="24px" font-weight="700" padding="0 0 12px">
+      New order received
+    </mj-text>
+    <mj-text>
+      Order <strong>#{{order.code}}</strong> was placed at {{order.placedAt}}.
+    </mj-text>
+    <mj-text>
+      <strong>Customer:</strong> {{customer.name}}<br />
+      <strong>Email:</strong> {{customer.email}}<br />
+      <strong>Phone:</strong> {{customer.phone}}
+    </mj-text>
+    <mj-text>
+      <strong>Delivery type:</strong> {{deliveryType}}<br />
+      <strong>Shipping method:</strong> {{shippingMethodName}}
+    </mj-text>
+    <mj-divider border-color="#eceaf2" padding="8px 0" />
+    <mj-text font-weight="700" color="#44476f">ORDER ITEMS</mj-text>
+    <mj-table
+      width="100%"
+      padding="0"
+      cellpadding="8px"
+      font-size="14px"
+      color="#55566f"
+    >
+      <tr style="border-bottom: 2px solid #eeeeee;">
+        <th align="left">Product</th>
+        <th align="center">Qty</th>
+        <th align="right">Amount</th>
+      </tr>
+      {{#each items}}
+        <tr style="border-bottom: 1px solid #eeeeee;">
+          <td>{{name}}<br /><small>{{sku}}</small></td>
+          <td align="center">{{quantity}}</td>
+          <td align="right">₹{{total}}</td>
+        </tr>
+      {{/each}}
+    </mj-table>
+    <mj-text align="right" font-size="17px" font-weight="700" color="#44476f" padding="16px 0 0">
+      Order total: ₹{{order.total}}
+    </mj-text>
+  </mj-column>
+</mj-section>
+
+{{> footer }}

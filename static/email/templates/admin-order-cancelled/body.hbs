@@ -1,0 +1,19 @@
+{{> header title="Order cancelled" }}
+
+<mj-section background-color="#f7f5fa" padding="0 16px 20px">
+  <mj-column background-color="#ffffff" border-radius="14px" padding="24px">
+    <mj-text align="center" font-size="24px" font-weight="700" color="#44476f" padding="0 0 12px">
+      Order cancellation received
+    </mj-text>
+    <mj-text font-size="15px" color="#55556a">
+      Order <strong>#{{order.code}}</strong> was cancelled by the customer.
+    </mj-text>
+    <mj-text font-size="14px" color="#55556a">
+      Customer: {{customer.name}}<br />
+      Email: {{customer.email}}<br />
+      Order total: ₹{{order.total}}
+    </mj-text>
+  </mj-column>
+</mj-section>
+
+{{> footer }}

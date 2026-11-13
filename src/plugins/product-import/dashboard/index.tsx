@@ -1,6 +1,6 @@
 import { Button, defineDashboardExtension } from '@vendure/dashboard';
 import { useNavigate } from '@tanstack/react-router';
-import { ProductCustomFields } from './product-custom-fields';
+// import { ProductCustomFields } from './product-custom-fields';
 import { CombinationSelector } from './combination-selector';
 import { ImportProductsPage } from './import-products-page';
 
@@ -55,15 +55,15 @@ defineDashboardExtension({
                 />
             ),
         },
-        {
-            id: 'conditional-product-custom-fields',
-            title: 'Product details',
-            location: {
-                pageId: 'product-detail',
-                column: 'main',
-                position: { blockId: 'custom-fields', order: 'replace' },
-            },
-            component: () => <ProductCustomFields />,
-        },
+        // {
+        //     id: 'conditional-product-custom-fields',
+        //     title: 'Product details',
+        //     location: {
+        //         pageId: 'product-detail',
+        //         column: 'main',
+        //         position: { blockId: 'custom-fields', order: 'replace' },
+        //     },
+        //     component: () => <ProductCustomFields />,
+        // },
     ],
 });

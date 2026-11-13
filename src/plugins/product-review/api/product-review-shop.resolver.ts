@@ -45,6 +45,17 @@ export class ProductReviewShopResolver {
     }
 
     @Query()
+    productRatings(
+        @Ctx() ctx: RequestContext,
+        @Args('productIds') productIds: ID[],
+    ) {
+        return this.productReviewService.getRatingSummaries(
+            ctx,
+            productIds,
+        );
+    }
+
+    @Query()
     featuredProductReviews(
         @Ctx() ctx: RequestContext,
         @Args('take') take: number,

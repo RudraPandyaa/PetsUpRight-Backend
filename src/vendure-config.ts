@@ -19,13 +19,44 @@ import { DashboardPlugin } from "@vendure/dashboard/plugin";
 import { GraphiqlPlugin } from "@vendure/graphiql-plugin";
 import { ProductImportPlugin } from "./plugins/product-import/product-import.plugin";
 import { ProductReviewPlugin } from './plugins/product-review/product-review.plugin';
+import { DeliveryPincodePlugin } from './plugins/delivery-pincode/delivery-pincode.plugin';
 import "dotenv/config";
 import path from "path";
 import { CloudinaryAssetStorageStrategy } from "./cloudinary/cloudinary-asset-storage.strategy";
 import { CmsPlugin } from "./plugins/cms/cms.plugin";
 import { razorpayPaymentHandler } from "./plugins/razorpay/razorpay-payment-handler";
 import { RazorpayPlugin } from "./plugins/razorpay/razorpay.plugin";
+import { json } from 'body-parser';
+import { shopApiCachePlugin } from './plugins/shop-api-cache/shop-api-cache';
 const IS_DEV = process.env.APP_ENV === "dev";
+const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
+import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
+import { shiprocketEmailHandlers } from './plugins/delivery-pincode/shiprocket-email.handlers';
+import {
+    ahmedabadManualChecker,
+    ahmedabadManualCalculator,
+    shiprocketChecker,
+    shiprocketCalculator,
+} from './shipping/shipping-operations';
+import { orderCancellationEmailHandlers } from './plugins/delivery-pincode/order-cancellation-email.handlers';
+import { HealthPlugin } from './plugins/health/health.plugin'
+import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
+// TLS for hosted databases. Supabase and similar use their own certificate
+// authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
+const databaseSsl =
+  process.env.DATABASE_SSL === 'true'
+    ? {
+        rejectUnauthorized:
+          process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+        ...(process.env.DATABASE_SSL_CA
+          ? {
+              ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, '\n'),
+            }
+          : {}),
+      }
+    : undefined;
+// Public address of the storefront (Nuxt), used for links in emails
+const storefrontUrl = (process.env.STOREFRONT_URL || "http://localhost:3001").replace(/\/+$/, "");
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
 // must take precedence over any value baked into the .env file at scaffold time.
 const serverPort =
@@ -37,15 +68,40 @@ export const config: VendureConfig = {
     adminApiPath: "admin-api",
     shopApiPath: "shop-api",
     trustProxy: IS_DEV ? false : 1,
+    // Answers repeated catalog queries from memory, see the plugin file
+    apolloServerPlugins: [shopApiCachePlugin],
     // The following options are useful in development mode,
     // but are best turned off for production for security
     // reasons.
+    middleware: [
+        {
+            handler: json({ limit: '10mb' }),
+            route: '/admin-api',
+            beforeListen: true,
+        },
+    ],
+
     ...(IS_DEV
       ? {
         adminApiDebug: true,
         shopApiDebug: true,
       }
       : {}),
+        cors: {
+            origin: [
+                storefrontUrl,
+                'https://petsupright-frontend-mvek.onrender.com',
+                'http://127.0.0.1:5173',
+                'http://localhost:5173',
+                // Dashboard dev server when 5173 is taken
+                'http://127.0.0.1:5174',
+                'http://localhost:5174',
+                'http://localhost:3001',
+                'http://127.0.0.1:3001',
+                'http://localhost:3000'
+            ],
+            credentials: true,
+        },
   },
   authOptions: {
     tokenMethod: ["bearer", "cookie"],
@@ -55,32 +111,71 @@ export const config: VendureConfig = {
     },
     cookieOptions: {
       secret: process.env.COOKIE_SECRET,
+      // Separate cookies, so an admin logged into the dashboard is not also
+      // "logged in" on the storefront of the same host (checkout would then
+      // fail with "Cannot set a Customer for the Order when already logged in")
+      name: {
+        shop: "shop-session",
+        admin: "admin-session",
+      },
     },
-    requireVerification: true,
+    requireVerification: false,
     verificationTokenDuration: '1h',
   },
-  dbConnectionOptions: {
-    type: "postgres",
-    url: process.env.DATABASE_URL,
-    synchronize: false,
-    migrations: [path.join(__dirname, "./migrations/*.+(js|ts)")],
-    logging: false,
-    ssl: true,
-    extra: {
-      max: 10,
-      min: 1,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-  },
-  },
+  // MySQL 8 or PostgreSQL, chosen by DATABASE_URL:
+  //   mysql://user:password@host:3306/database       (local development)
+  //   postgresql://user:password@host:5432/database  (e.g. Supabase)
+  // Each database type has its own migrations in src/migrations/<type>.
+  // Hosted databases usually require TLS: set DATABASE_SSL=true.
+  dbConnectionOptions: IS_POSTGRES
+    ? {
+        type: "postgres",
+        url: process.env.DATABASE_URL,
+        synchronize: false,
+        migrations: [path.join(__dirname, "./migrations/postgres/*.+(js|ts)")],
+        logging: false,
+        ssl: databaseSsl,
+        extra: {
+          max: Number(process.env.DATABASE_POOL_SIZE) || 10,
+          connectionTimeoutMillis: 10000,
+          // Idle connections are closed after 30s: Supabase's session pooler
+          // allows only 15 clients for the server, the worker and backups
+          // together. A longer value saves reconnecting (~0.4s) where the
+          // database has room for it.
+          idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS) || 30000,
+          keepAlive: true,
+        },
+      }
+    : {
+        type: "mysql",
+        url: process.env.DATABASE_URL,
+        synchronize: false,
+        migrations: [path.join(__dirname, "./migrations/mysql/*.+(js|ts)")],
+        logging: false,
+        charset: "utf8mb4_unicode_ci",
+        // Store and read all dates as UTC, whatever the server's time zone
+        timezone: "Z",
+        ssl: databaseSsl,
+        extra: {
+          connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 10,
+          connectTimeout: 10000,
+        },
+      },
   paymentOptions: {
     paymentMethodHandlers: [razorpayPaymentHandler],
   },
-  shippingOptions: {
-    shippingEligibilityCheckers: [defaultShippingEligibilityChecker],
-
-    shippingCalculators: [defaultShippingCalculator],
-  },
+    shippingOptions: {
+        shippingEligibilityCheckers: [
+            defaultShippingEligibilityChecker,
+            ahmedabadManualChecker,
+            shiprocketChecker,
+        ],
+        shippingCalculators: [
+            defaultShippingCalculator,
+            ahmedabadManualCalculator,
+            shiprocketCalculator,
+        ],
+    },
   promotionOptions: {
     promotionActions: [...defaultPromotionActions],
     promotionConditions: [...defaultPromotionConditions],
@@ -88,53 +183,357 @@ export const config: VendureConfig = {
   
   // When adding or altering custom field definitions, the database will
   // need to be updated. See the "Migrations" section in README.md.
-  customFields: {
-    Product: [
-      {
-        name: "petType",
-        type: "string",
-        options: [
-          { value: "Dog" },
-          { value: "Cat" },
-          { value: "Bird" },
-          { value: "Hemster" },
-          { value: "Guinea Pig" },
-          { value: "Turtle" },
-          { value: "Rabbit" },
-          { value: "Fish" },
-          { value: "Horse" },
-        ],
-        label: [{ languageCode: LanguageCode.en, value: "Pet Type" }],
-        description: [
+    customFields: {
+      Product: [
+          // Existing fields kept for frontend compatibility
           {
-            languageCode: LanguageCode.en,
-            value: "Select the pet this product is for",
+              name: 'petType',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Pet Type (Legacy)',
+                  },
+              ],
           },
-        ],
-      },
-      {
-        name: 'isFood',
-        type: 'boolean',
-        defaultValue: false,
-        label: [{ languageCode: LanguageCode.en, value: 'Is this a food product?' }],
-      },
-      {
-        name: 'ingredients',
-        type: 'string',
-        list: true,
-        label: [{ languageCode: LanguageCode.en, value: 'Ingredients' }],
-      },
-      {
-        name: 'usageAndFeeding',
-        type: 'text',
-        label: [{ languageCode: LanguageCode.en, value: 'Usage & Feeding' }],
-      },
-      {
-        name: 'specifications',
-        type: 'text',
-        label: [{ languageCode: LanguageCode.en, value: 'Specifications' }],
-      },
-    ],
+          {
+              name: 'isFood',
+              type: 'boolean',
+              defaultValue: false,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Is this a food product?',
+                  },
+              ],
+          },
+          {
+              name: 'ingredients',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Ingredients',
+                  },
+              ],
+          },
+          {
+              name: 'usageAndFeeding',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Usage & Feeding',
+                  },
+              ],
+          },
+          {
+              name: 'specifications',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Specifications',
+                  },
+              ],
+          },
+
+          // New OPN product fields
+          {
+              name: 'keyPoints',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Key Points',
+                  },
+              ],
+          },
+          {
+              name: 'analyticalConstituents',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Analytical Constituents',
+                  },
+              ],
+          },
+          {
+              name: 'countryOfOrigin',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Country of Origin',
+                  },
+              ],
+          },
+          {
+              name: 'manufacturerName',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Manufacturer',
+                  },
+              ],
+          },
+          {
+              name: 'manufacturerAddress',
+              type: 'text',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Manufacturer Address',
+                  },
+              ],
+          },
+          {
+              name: 'supplierName',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Supplier',
+                  },
+              ],
+          },
+      ],
+
+      ProductVariant: [
+        {
+            name: 'itemCode',
+            type: 'string',
+            nullable: true,
+            label: [
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Client Item Code',
+                },
+            ],
+        },
+        {
+            name: 'shippingWeightGrams',
+            defaultValue: Number(process.env.SHIPROCKET_DEFAULT_WEIGHT_GRAMS ?? 500),
+            type: 'int',
+            nullable: true,
+            label: [
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Shipping weight (grams)',
+                },
+            ],
+            description: [
+                {
+                    languageCode: LanguageCode.en,
+                    value: 'Packed weight of one variant in grams, used for courier rates.',
+                },
+            ],
+            ui: {
+                component: 'number-form-input',
+            },
+        },
+          {
+              name: 'barcode',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Barcode',
+                  },
+              ],
+          },
+          {
+              name: 'asin',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'ASIN',
+                  },
+              ],
+          },
+          {
+              name: 'unit',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Unit',
+                  },
+              ],
+          },
+          {
+              name: 'weightInGrams',
+              type: 'int',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Weight in grams',
+                  },
+              ],
+          },
+          {
+              name: 'packing',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Packing',
+                  },
+              ],
+          },
+          {
+              name: 'hsnCode',
+              type: 'string',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'HSN Code',
+                  },
+              ],
+          },
+          {
+              name: 'gstPercentage',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'GST Percentage',
+                  },
+              ],
+          },
+          {
+              name: 'casePack',
+              type: 'int',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Case Pack',
+                  },
+              ],
+          },
+          {
+              name: 'shelfLifeYears',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Shelf Life in years',
+                  },
+              ],
+          },
+          {
+              name: 'packageLengthCm',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Package length (cm)',
+                  },
+              ],
+          },
+          {
+              name: 'packageWidthCm',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Package width (cm)',
+                  },
+              ],
+          },
+          {
+              name: 'packageHeightCm',
+              type: 'float',
+              nullable: true,
+              label: [
+                  {
+                      languageCode: LanguageCode.en,
+                      value: 'Package height (cm)',
+                  },
+              ],
+          },
+      ],
+                        Fulfillment: [
+                    {
+                        name: 'shiprocketOrderId',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Order ID',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketShipmentId',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Shipment ID',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketAwbCode',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket AWB Code',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketCourierName',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Courier',
+                            },
+                        ],
+                    },
+                    {
+                        name: 'shiprocketStatus',
+                        type: 'string',
+                        nullable: true,
+                        label: [
+                            {
+                                languageCode: LanguageCode.en,
+                                value: 'Shiprocket Status',
+                            },
+                        ],
+                    },
+                ],
   },
   plugins: [
     GraphiqlPlugin.init(),
@@ -146,12 +545,23 @@ export const config: VendureConfig = {
       storageStrategyFactory: () => new CloudinaryAssetStorageStrategy(),
     }),
     DefaultSchedulerPlugin.init(),
-    DefaultJobQueuePlugin.init({ useDatabaseForBuffer: true }),
+    DefaultJobQueuePlugin.init({
+      useDatabaseForBuffer: true,
+      // How often (ms) the worker checks the database for new jobs. Vendure's
+      // default is 200 ms; checking less often lowers database load, which
+      // matters on hosted databases with usage quotas.
+      pollInterval: Number(process.env.JOB_QUEUE_POLL_INTERVAL_MS) || 1000,
+    }),
     DefaultSearchPlugin.init({ bufferUpdates: false, indexStockStatus: true }),
     EmailPlugin.init({
       route: "mailbox",
 
-      handlers: defaultEmailHandlers,
+      handlers: [
+    ...defaultEmailHandlers,
+    ...shiprocketEmailHandlers,
+    ...shiprocketAdminEmailHandlers,
+    ...orderCancellationEmailHandlers,
+    ],
 
       templateLoader: new FileBasedTemplateLoader(
         path.join(__dirname, "../static/email/templates"),
@@ -170,17 +580,30 @@ export const config: VendureConfig = {
       },
 
       globalTemplateVars: {
+        emailLogoUrl:
+            process.env.EMAIL_LOGO_URL ??
+            'https://res.cloudinary.com/oyrw2mrv/image/upload/v1794475978/logo-png_e4vmy1.png',
+        storefrontUrl,
         fromAddress: process.env.SMTP_FROM,
-        verifyEmailAddressUrl: "http://localhost:3001/verify",
-        passwordResetUrl: "http://localhost:3001/reset-password",
-        changeEmailAddressUrl:
-          "http://localhost:3001/verify-email-address-change",
+        // Links in customer emails point to the storefront
+        verifyEmailAddressUrl: `${storefrontUrl}/verify`,
+        passwordResetUrl: `${storefrontUrl}/reset-password`,
+        changeEmailAddressUrl: `${storefrontUrl}/verify-email-address-change`,
       },
     }),
     CmsPlugin.init({}),
-    ProductImportPlugin,
+    ProductImportPlugin.init({
+      // Optional; default 3 each. See src/plugins/product-import/constants.ts
+      productConcurrency: Number(process.env.IMPORT_PRODUCT_CONCURRENCY) || undefined,
+      imageConcurrency: Number(process.env.IMPORT_IMAGE_CONCURRENCY) || undefined,
+    }),
     RazorpayPlugin,
+    HealthPlugin,
     ProductReviewPlugin,
+    DeliveryPincodePlugin,
+    GoogleAuthPlugin.init({
+        googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    }),
     DashboardPlugin.init({
       route: "dashboard",
       appDir: IS_DEV

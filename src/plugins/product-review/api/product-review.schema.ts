@@ -80,6 +80,8 @@ export const shopApiExtensions = gql`
 
         productRating(productId: ID!): ProductRatingSummary!
 
+        productRatings(productIds: [ID!]!): [ProductRatingSummary!]!
+
         featuredProductReviews(take: Int = 6): [ProductReview!]!
         productReviewEligibility(
             productId: ID!

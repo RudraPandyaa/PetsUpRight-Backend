@@ -1,0 +1,17 @@
+{{> header title="Order delivered" previewOrderCode=order.code previewPrefix="Order " previewSuffix=" has been delivered." }}
+
+<mj-section background-color="#f7f5fa" padding="0 16px 20px">
+  <mj-column background-color="#ffffff" border-radius="14px" padding="24px">
+    <mj-text align="center" color="#32805a" font-size="24px" font-weight="700" padding="0 0 12px">
+      Order delivered
+    </mj-text>
+    <mj-text align="center">
+      Order <strong>#{{order.code}}</strong> has been delivered.
+    </mj-text>
+    <mj-divider border-color="#eceaf2" padding="8px 0" />
+    <mj-text><strong>Courier:</strong> {{fulfillment.courierName}}</mj-text>
+    <mj-text><strong>Tracking / AWB:</strong><br />{{fulfillment.trackingCode}}</mj-text>
+  </mj-column>
+</mj-section>
+
+{{> footer }}

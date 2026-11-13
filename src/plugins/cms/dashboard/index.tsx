@@ -35,6 +35,21 @@ import {
 } from '@tanstack/react-router';
 
 
+type HeroSlideContent = {
+  badge: string;
+  title: string;
+  subtitle: string;
+  link: string;
+};
+
+const DEFAULT_HERO_CONTENT: HeroSlideContent[] = [
+  { badge: 'Just Dropped', title: 'Joy in every little moment', subtitle: 'Thoughtful essentials for happier pets', link: '/shop' },
+  { badge: 'Everyday Favourites', title: 'Made for tails that never stop', subtitle: 'Food, play and care—all in one place', link: '/shop' },
+  { badge: 'The PetsUpRight Edit', title: 'Everything they love', subtitle: 'Chosen with care for every companion', link: '/shop' },
+  { badge: 'Play Collection', title: 'Let the good times roll', subtitle: 'Toys for curious minds and happy paws', link: '/shop?category=toys' },
+  { badge: 'Comfort Collection', title: 'Feels just like home', subtitle: 'Cosy picks for naps, cuddles and slow days', link: '/shop' },
+];
+
 defineDashboardExtension({
     routes: [
         {
@@ -252,8 +267,10 @@ defineDashboardExtension({
                 const [assetPickerOpen, setAssetPickerOpen] =
                     useState(false);
                 const [assetPickerMode, setAssetPickerMode] =
-                    useState<'hero' | 'happy-tails' | 'contact-hero' | 'contact-logo' | 'component-image'>('hero');
+                    useState<'hero' | 'happy-tails' | 'contact-hero' | 'contact-logo' | 'component-image' | 'category-image'>('hero');
                 const [componentImageId, setComponentImageId] = useState<string | null>(null);
+                const [categoryImageCode, setCategoryImageCode] =
+                    useState<string | null>(null);
                 const [componentFormOpen, setComponentFormOpen] = useState(false);
                 const [componentType, setComponentType] = useState('text');
 
@@ -327,12 +344,41 @@ defineDashboardExtension({
                     setReviewDrafts(reviewsSection?.data?.reviews ?? []);
                     const drafts: Record<string, any> = {};
                     page?.sections
-                        .filter(section => ['image', 'text', 'products'].includes(section.type))
+                        .filter(section =>
+                            ['image', 'text', 'products', 'comfort-care', 'pet-category-images'].includes(section.type),
+                        )
                         .forEach(section => {
                             drafts[section.id] = section.data ?? {};
                         });
                     setGenericDrafts(drafts);
                 }, [reviewsSection?.data?.reviews, page?.sections]);
+
+                const [heroContentDrafts, setHeroContentDrafts] =
+                useState<HeroSlideContent[]>([]);
+
+                useEffect(() => {
+                const saved = heroSection?.data?.content ?? [];
+                const images = heroSection?.data?.images ?? [];
+
+                setHeroContentDrafts(
+                    images.map((_: any, index: number) => ({
+                    ...(DEFAULT_HERO_CONTENT[index % DEFAULT_HERO_CONTENT.length]!),
+                    ...(saved[index] ?? {}),
+                    })),
+                );
+                }, [heroSection?.id, heroSection?.data?.images, heroSection?.data?.content]);
+
+                function updateHeroContent(
+                index: number,
+                field: keyof HeroSlideContent,
+                value: string,
+                ) {
+                setHeroContentDrafts(current =>
+                    current.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, [field]: value } : item,
+                    ),
+                );
+                }
 
                 const saveHero = useMutation({
                     mutationFn: async (assets: any[]) => {
@@ -345,12 +391,18 @@ defineDashboardExtension({
                         }
 
                         const heroData = {
-                            images: assets.map(asset => ({
-                                source: asset.source,
-                                preview: asset.preview,
-                                assetId: asset.id,
-                            })),
-                            publishedImages: heroSection?.data?.publishedImages,
+                        images: assets.map(asset => ({
+                            source: asset.source,
+                            preview: asset.preview,
+                            assetId: asset.id,
+                        })),
+                        content: assets.map(
+                            (_: any, index: number) =>
+                            heroContentDrafts[index] ??
+                            DEFAULT_HERO_CONTENT[index % DEFAULT_HERO_CONTENT.length]!,
+                        ),
+                        publishedImages: heroSection?.data?.publishedImages,
+                        publishedContent: heroSection?.data?.publishedContent,
                         };
 
                         if (heroSection) {
@@ -411,9 +463,89 @@ defineDashboardExtension({
                             products: {
                                 title: 'New Arrivals',
                                 products: [],
+                                endDate: '',
                                 publishedTitle: '',
+                                publishedEndDate: '',
                                 publishedProducts: [],
                             },
+                            'pet-category-images': {
+                                images: {},
+                                publishedImages: {},
+                            },
+                            'comfort-care': {
+                                eyebrow: 'Thoughtful pet care',
+                                title: 'Everything for their',
+                                titleAccent: 'happiest everyday.',
+                                description:
+                                    'From wholesome food to restful sleep, discover thoughtfully selected essentials for every part of your pet’s day.',
+                                ctaLabel: 'Explore all products',
+                                ctaLink: '/shop',
+                                showcaseLabel: 'Comfort • Care • Joy',
+                                showcaseTitle: 'Because they are not just pets.',
+                                showcaseTitleAccent: 'They are family.',
+                                showcaseDescription:
+                                    'Everyday essentials chosen to bring better nutrition, comfort, wellness and play into your pet’s life.',
+                                    showcasePoints: [
+                                        { title: 'Carefully selected', description: 'Products made for pets' },
+                                        { title: 'Made with care', description: 'For happier companions' },
+                                        ],
+                                        visualWords: ['Healthy', 'Happy', 'Loved'],
+                                        showcaseImage: '/images/comfort-care/husky.webp',
+                                        showcaseImageAlt: 'Happy Husky dog',
+                                        visualNoteTitle: 'Pet-first choices',
+                                        visualNoteDescription: 'For every kind of pet',
+                                        messageImage: '/images/comfort-care/wagging-dog.webp',
+                                        messageImageAlt: '',
+                                        messageTitle: 'More care in every little moment.',
+                                        messageSubtitle: 'Better choices for healthier and happier pets.',
+                                        messageTags: ['Premium quality', 'Pet friendly', 'Everyday essentials'],
+                                        showcaseLink: '/shop?collection=dog',
+                                        showcaseButtonLabel: 'Shop dog products',
+                                careItems: [
+                                    {
+                                    title: 'Premium Grooming',
+                                    description: 'Gentle care for a fresh and healthy coat.',
+                                    image: '/images/comfort-care/Premium-Grooming.png',
+                                    className: 'item-grooming',
+                                    number: '01',
+                                    },
+                                    {
+                                    title: 'Premium Food',
+                                    description: 'Wholesome nutrition for everyday energy.',
+                                    image: '/images/comfort-care/Premium-Food.png',
+                                    className: 'item-food',
+                                    number: '02',
+                                    },
+                                    {
+                                    title: 'Health Essentials',
+                                    description: 'Thoughtful wellness support for happier pets.',
+                                    image: '/images/comfort-care/health.png',
+                                    className: 'item-health',
+                                    number: '03',
+                                    },
+                                    {
+                                    title: 'Cosy Beds',
+                                    description: 'Comfortable spaces for peaceful sleep.',
+                                    image: '/images/comfort-care/dog-beds.png',
+                                    className: 'item-beds',
+                                    number: '04',
+                                    },
+                                    {
+                                    title: 'Playful Toys',
+                                    description: 'Engaging play for active and curious minds.',
+                                    image: '/images/comfort-care/toys.png',
+                                    className: 'item-toys',
+                                    number: '05',
+                                    },
+                                    {
+                                    title: 'Walk Essentials',
+                                    description: 'Reliable everyday gear for safer adventures.',
+                                    image: '/images/comfort-care/Walk-Essentials.png',
+                                    className: 'item-walk',
+                                    number: '06',
+                                    },
+                                ],
+                                },
                             contact: {
                                 heroImage: '',
                                 logoImage: '',
@@ -466,29 +598,36 @@ defineDashboardExtension({
                 });
 
                 const reorderHero = useMutation({
-                    mutationFn: async (images: any[]) => {
-                        if (!heroSection) {
-                            throw new Error('Hero section not found');
-                        }
+                mutationFn: async ({
+                    images,
+                    content,
+                }: {
+                    images: any[];
+                    content: HeroSlideContent[];
+                }) => {
+                    if (!heroSection) {
+                    throw new Error('Hero section not found');
+                    }
 
-                        return api.mutate(updateCmsSectionMutation, {
-                            input: {
-                                id: heroSection.id,
-                                data: {
-                                    ...heroSection.data,
-                                    images,
-                                },
-                            },
-                        });
+                    return api.mutate(updateCmsSectionMutation, {
+                    input: {
+                        id: heroSection.id,
+                        data: {
+                        ...heroSection.data,
+                        images,
+                        content,
+                        },
                     },
-                    onSuccess: () => {
-                        queryClient.invalidateQueries({ queryKey: ['cms-page', id] });
-                    },
-                    onError: (error: Error) => {
-                        toast.error('Failed to reorder hero images', {
-                            description: error.message,
-                        });
-                    },
+                    });
+                },
+                onSuccess: () => {
+                    queryClient.invalidateQueries({ queryKey: ['cms-page', id] });
+                },
+                onError: (error: Error) => {
+                    toast.error('Failed to reorder hero images', {
+                    description: error.message,
+                    });
+                },
                 });
 
                 const saveHappyTails = useMutation({
@@ -723,8 +862,10 @@ defineDashboardExtension({
                                     input: {
                                         id: heroSection.id,
                                         data: {
-                                            ...heroSection.data,
-                                            publishedImages: heroImages.map((image: any) => image.source),
+                                        ...heroSection.data,
+                                        content: heroContentDrafts,
+                                        publishedImages: heroImages.map((image: any) => image.source),
+                                        publishedContent: heroContentDrafts,
                                         },
                                     },
                                 }));
@@ -832,6 +973,10 @@ defineDashboardExtension({
                                             ...draft,
                                             publishedTitle:
                                                 draft.title ?? 'New Arrivals',
+                                                publishedEyebrow: draft.eyebrow ?? 'Fresh from the pack',
+                                                publishedDescription:
+                                                draft.description ??
+                                                'Meet the newest favourites picked for happier, healthier and more playful pets.',
                                             publishedProducts:
                                                 selectedProducts,
                                         },
@@ -840,6 +985,76 @@ defineDashboardExtension({
                             );
                         }
 
+                        const comfortCareSections =
+                        page.sections.filter(section => section.type === 'comfort-care');
+
+                        for (const section of comfortCareSections) {
+                        const draft =
+                            genericDrafts[section.id] ??
+                            section.data ??
+                            {};
+
+                        updates.push(
+                            api.mutate(updateCmsSectionMutation, {
+                            input: {
+                                id: section.id,
+                                data: {
+                                ...draft,
+                                publishedContent: {
+                                    eyebrow: draft.eyebrow ?? '',
+                                    title: draft.title ?? '',
+                                    titleAccent: draft.titleAccent ?? '',
+                                    description: draft.description ?? '',
+                                    ctaLabel: draft.ctaLabel ?? '',
+                                    ctaLink: draft.ctaLink ?? '',
+                                    showcaseLabel: draft.showcaseLabel ?? '',
+                                    showcaseTitle: draft.showcaseTitle ?? '',
+                                    showcaseTitleAccent: draft.showcaseTitleAccent ?? '',
+                                    showcaseDescription: draft.showcaseDescription ?? '',
+                                    showcaseLink: draft.showcaseLink ?? '/shop?collection=dog',
+                                    showcaseButtonLabel:
+                                        draft.showcaseButtonLabel ?? 'Shop dog products',
+                                    showcasePoints: draft.showcasePoints ?? [],
+                                    visualWords: draft.visualWords ?? [],
+                                    showcaseImage: draft.showcaseImage ?? '',
+                                    showcaseImageAlt: draft.showcaseImageAlt ?? '',
+                                    visualNoteTitle: draft.visualNoteTitle ?? '',
+                                    visualNoteDescription: draft.visualNoteDescription ?? '',
+                                    messageImage: draft.messageImage ?? '',
+                                    messageImageAlt: draft.messageImageAlt ?? '',
+                                    messageTitle: draft.messageTitle ?? '',
+                                    messageSubtitle: draft.messageSubtitle ?? '',
+                                    messageTags: draft.messageTags ?? [],
+                                    careItems: draft.careItems ?? [],
+                                },
+                                },
+                            },
+                            }),
+                        );
+                        }
+                        const categoryImageSections =
+                            page.sections.filter(
+                                section => section.type === 'pet-category-images',
+                            );
+
+                            for (const section of categoryImageSections) {
+                            const draft =
+                                genericDrafts[section.id] ?? section.data ?? {};
+
+                            updates.push(
+                                api.mutate(updateCmsSectionMutation, {
+                                input: {
+                                    id: section.id,
+                                    data: {
+                                    ...draft,
+                                    publishedImages: draft.images ?? {},
+                                    },
+                                },
+                                }),
+                            );
+                            }
+
+                            
                         return Promise.all(updates);
                     },
                     onSuccess: async () => {
@@ -941,14 +1156,21 @@ defineDashboardExtension({
                     }
 
                     if (type === 'hero') {
-                        const images = moveItem(heroSection?.data?.images ?? [], fromIndex, index);
-                        reorderHero.mutate(images);
-                    } else if (type === 'video') {
-                        const videos = moveItem(happyTailsSection?.data?.videos ?? [], fromIndex, index);
-                        reorderVideos.mutate(videos);
-                    } else {
-                        setReviewDrafts(moveItem(reviewDrafts, fromIndex, index));
-                    }
+                        const images = moveItem(
+                            heroSection?.data?.images ?? [],
+                            fromIndex,
+                            index,
+                        );
+
+                        const content = moveItem(
+                            heroContentDrafts,
+                            fromIndex,
+                            index,
+                        ) as HeroSlideContent[];
+
+                        setHeroContentDrafts(content);
+                        reorderHero.mutate({ images, content });
+                        }
 
                     setDraggedItem(null);
                 }
@@ -1024,6 +1246,8 @@ defineDashboardExtension({
                                                         <option value="pawsitive-reviews">Reviews</option>
                                                         <option value="happy-tails">Videos</option>
                                                         <option value="products">Products</option>
+                                                        <option value="pet-category-images">Pet category images</option>
+                                                        <option value="comfort-care">Comfort Care</option>
                                                         <option value="contact">Contact details</option>
                                                     </select>
                                                 </div>
@@ -1079,7 +1303,9 @@ defineDashboardExtension({
 
                                         <div className="space-y-4">
                                             {page.sections
-                                                .filter(section => ['image', 'text', 'products'].includes(section.type))
+                                                .filter(section =>
+                                                    ['image', 'text', 'products', 'comfort-care', 'pet-category-images'].includes(section.type)
+                                                    )
                                                 .map(section => {
                                                     const draft = genericDrafts[section.id] ?? section.data ?? {};
 
@@ -1126,6 +1352,55 @@ defineDashboardExtension({
                                                                             }
                                                                         />
                                                                     </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label>Show until (optional)</Label>
+                                                                        <Input
+                                                                            type="date"
+                                                                            value={draft.endDate ?? ''}
+                                                                            onChange={event =>
+                                                                            setGenericDrafts({
+                                                                                ...genericDrafts,
+                                                                                [section.id]: {
+                                                                                ...draft,
+                                                                                endDate: event.target.value,
+                                                                                },
+                                                                            })
+                                                                            }
+                                                                        />
+                                                                        </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label>Section eyebrow</Label>
+                                                                        <Input
+                                                                            value={draft.eyebrow ?? ''}
+                                                                            placeholder="Fresh from the pack"
+                                                                            onChange={event =>
+                                                                            setGenericDrafts({
+                                                                                ...genericDrafts,
+                                                                                [section.id]: {
+                                                                                ...draft,
+                                                                                eyebrow: event.target.value,
+                                                                                },
+                                                                            })
+                                                                            }
+                                                                        />
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                        <Label>Section description</Label>
+                                                                        <Textarea
+                                                                            value={draft.description ?? ''}
+                                                                            placeholder="Meet the newest favourites..."
+                                                                            onChange={event =>
+                                                                            setGenericDrafts({
+                                                                                ...genericDrafts,
+                                                                                [section.id]: {
+                                                                                ...draft,
+                                                                                description: event.target.value,
+                                                                                },
+                                                                            })
+                                                                            }
+                                                                        />
+                                                                        </div>
 
                                                                     <div className="space-y-2">
                                                                         <Label>Select Products</Label>
@@ -1211,21 +1486,264 @@ defineDashboardExtension({
 
                                                                 </div>
                                                             )}
-                                                            {section.type === 'image' && (
-                                                                <div className="flex items-center gap-3">
-                                                                    {draft.preview && (
-                                                                        <img src={draft.preview} alt="Component" className="h-20 w-32 rounded border object-cover" />
-                                                                    )}
-                                                                    <Button
-                                                                        type="button"
-                                                                        onClick={() => {
+                                                            {section.type === 'comfort-care' && (
+                                                                <div className="space-y-4">
+                                                                    {[
+                                                                    ['eyebrow', 'Eyebrow'],
+                                                                    ['title', 'Title'],
+                                                                    ['titleAccent', 'Title accent'],
+                                                                    ['description', 'Description'],
+                                                                    ['ctaLabel', 'Button label'],
+                                                                    ['ctaLink', 'Button link'],
+                                                                    ['showcaseLabel', 'Showcase label'],
+                                                                    ['showcaseTitle', 'Showcase title'],
+                                                                    ['showcaseTitleAccent', 'Showcase title accent'],
+                                                                    ['showcaseDescription', 'Showcase description'],
+                                                                    ['showcaseLink', 'Showcase link'],
+                                                                    ['showcaseButtonLabel', 'Showcase button text'],
+                                                                    ['showcaseImage', 'Showcase image URL/path'],
+                                                                    ['showcaseImageAlt', 'Showcase image alt text'],
+                                                                    ['visualNoteTitle', 'Visual note title'],
+                                                                    ['visualNoteDescription', 'Visual note description'],
+                                                                    ['messageImage', 'Bottom image URL/path'],
+                                                                    ['messageImageAlt', 'Bottom image alt text'],
+                                                                    ['messageTitle', 'Bottom message title'],
+                                                                    ['messageSubtitle', 'Bottom message subtitle'],
+                                                                    ].map(([field, label]) => (
+                                                                    <div key={field} className="space-y-2">
+                                                                        <Label>{label}</Label>
+                                                                        <Input
+                                                                        value={draft[field] ?? ''}
+                                                                        onChange={event =>
+                                                                            setGenericDrafts({
+                                                                            ...genericDrafts,
+                                                                            [section.id]: {
+                                                                                ...draft,
+                                                                                [field]: event.target.value,
+                                                                            },
+                                                                            })
+                                                                        }
+                                                                        />
+                                                                    </div>
+                                                                    ))}
+
+
+                                                                    <div className="space-y-3">
+                                                                        <h4 className="font-medium">Showcase points</h4>
+
+                                                                        {(draft.showcasePoints ?? [
+                                                                            { title: 'Carefully selected', description: 'Products made for pets' },
+                                                                            { title: 'Made with care', description: 'For happier companions' },
+                                                                        ]).map((point: any, index: number) => (
+                                                                            <div key={index} className="space-y-2 rounded-md border p-3">
+                                                                            <Label>Point {index + 1}</Label>
+
+                                                                            {(['title', 'description'] as const).map(field => (
+                                                                                <Input
+                                                                                key={field}
+                                                                                aria-label={`Point ${index + 1} ${field}`}
+                                                                                placeholder={field}
+                                                                                value={point[field] ?? ''}
+                                                                                onChange={event => {
+                                                                                    const showcasePoints = [
+                                                                                    ...(draft.showcasePoints ?? [
+                                                                                        { title: 'Carefully selected', description: 'Products made for pets' },
+                                                                                        { title: 'Made with care', description: 'For happier companions' },
+                                                                                    ]),
+                                                                                    ];
+                                                                                    showcasePoints[index] = {
+                                                                                    ...showcasePoints[index],
+                                                                                    [field]: event.target.value,
+                                                                                    };
+
+                                                                                    setGenericDrafts({
+                                                                                    ...genericDrafts,
+                                                                                    [section.id]: { ...draft, showcasePoints },
+                                                                                    });
+                                                                                }}
+                                                                                />
+                                                                            ))}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+
+                                                                        <div className="space-y-2">
+                                                                        <Label>Visual words (one per line)</Label>
+                                                                        <Textarea
+                                                                            value={(draft.visualWords ?? ['Healthy', 'Happy', 'Loved']).join('\n')}
+                                                                            onChange={event =>
+                                                                            setGenericDrafts({
+                                                                                ...genericDrafts,
+                                                                                [section.id]: {
+                                                                                ...draft,
+                                                                                visualWords: event.target.value.split('\n'),
+                                                                                },
+                                                                            })
+                                                                            }
+                                                                        />
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                        <Label>Message tags (one per line)</Label>
+                                                                        <Textarea
+                                                                            value={(
+                                                                            draft.messageTags ?? [
+                                                                                'Premium quality',
+                                                                                'Pet friendly',
+                                                                                'Everyday essentials',
+                                                                            ]
+                                                                            ).join('\n')}
+                                                                            onChange={event =>
+                                                                            setGenericDrafts({
+                                                                                ...genericDrafts,
+                                                                                [section.id]: {
+                                                                                ...draft,
+                                                                                messageTags: event.target.value.split('\n'),
+                                                                                },
+                                                                            })
+                                                                            }
+                                                                        />
+                                                                        </div>
+                                                                    <h4 className="font-medium">Care cards</h4>
+
+                                                                        {(draft.careItems ?? []).map((item: any, itemIndex: number) => (
+                                                                            <div
+                                                                                key={itemIndex}
+                                                                                className="space-y-3 rounded-md border p-3"
+                                                                            >
+                                                                                <p className="font-medium">Card {itemIndex + 1}</p>
+
+                                                                                {(['title', 'description', 'image', 'buttonLabel'] as const).map(field => (
+                                                                                    <div key={field} className="space-y-1">
+                                                                                        <Label>
+                                                                                            {field === 'image'
+                                                                                                ? 'Image URL/path'
+                                                                                                : field === 'buttonLabel'
+                                                                                                ? 'Button text'
+                                                                                                : field}
+                                                                                        </Label>
+
+                                                                                        <Input
+                                                                                            value={item[field] ?? ''}
+                                                                                            onChange={event => {
+                                                                                                const careItems = [...(draft.careItems ?? [])];
+
+                                                                                                careItems[itemIndex] = {
+                                                                                                    ...careItems[itemIndex],
+                                                                                                    [field]: event.target.value,
+                                                                                                };
+
+                                                                                                setGenericDrafts(current => ({
+                                                                                                    ...current,
+                                                                                                    [section.id]: {
+                                                                                                        ...draft,
+                                                                                                        careItems,
+                                                                                                    },
+                                                                                                }));
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+                                                                                ))}
+
+                                                                                <div className="space-y-1">
+                                                                                    <Label>Collection slug</Label>
+
+                                                                                    <Input
+                                                                                        placeholder="dog-grooming"
+                                                                                        value={item.collectionSlug ?? ''}
+                                                                                        onChange={event => {
+                                                                                            const careItems = [...(draft.careItems ?? [])];
+
+                                                                                            careItems[itemIndex] = {
+                                                                                                ...careItems[itemIndex],
+                                                                                                collectionSlug: event.target.value.trim(),
+                                                                                            };
+
+                                                                                            setGenericDrafts(current => ({
+                                                                                                ...current,
+                                                                                                [section.id]: {
+                                                                                                    ...draft,
+                                                                                                    careItems,
+                                                                                                },
+                                                                                            }));
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                </div>
+                                                            )}
+                                                            {section.type === 'pet-category-images' && (
+                                                                <div className="grid gap-4 md:grid-cols-2">
+                                                                    {[
+                                                                    { code: 'dog', label: 'Dog' },
+                                                                    { code: 'cat', label: 'Cat' },
+                                                                    { code: 'bird', label: 'Bird' },
+                                                                    { code: 'fish', label: 'Fish' },
+                                                                    { code: 'guinea-pig', label: 'Guinea Pig' },
+                                                                    { code: 'hamster', label: 'Hamster' },
+                                                                    { code: 'horse', label: 'Horse' },
+                                                                    { code: 'rabbit', label: 'Rabbit' },
+                                                                    { code: 'turtle', label: 'Turtle' },
+                                                                    ].map(({ code, label }) => {
+                                                                    const image = draft.images?.[code];
+
+                                                                    return (
+                                                                        <div key={code} className="space-y-2 rounded-md border p-3">
+                                                                        <Label>{label}</Label>
+
+                                                                        {image?.preview && (
+                                                                            <img
+                                                                            src={image.preview}
+                                                                            alt={label}
+                                                                            className="h-24 w-32 rounded border object-cover"
+                                                                            />
+                                                                        )}
+
+                                                                        <Button
+                                                                            type="button"
+                                                                            onClick={() => {
                                                                             setComponentImageId(section.id);
-                                                                            setAssetPickerMode('component-image');
+                                                                            setCategoryImageCode(code);
+                                                                            setAssetPickerMode('category-image');
                                                                             setAssetPickerOpen(true);
-                                                                        }}
-                                                                    >
-                                                                        {draft.image ? 'Change Image' : 'Select Image'}
-                                                                    </Button>
+                                                                            }}
+                                                                        >
+                                                                            {image?.preview ? 'Change image' : 'Select image'}
+                                                                        </Button>
+                                                                        {image && (
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="destructive"
+                                                                                onClick={async () => {
+                                                                                    const currentDraft =
+                                                                                        genericDrafts[section.id] ?? section.data ?? {};
+
+                                                                                    const updatedImages: Record<string, any> = {
+                                                                                        ...(currentDraft.images ?? {}),
+                                                                                    };
+
+                                                                                    delete updatedImages[code];
+
+                                                                                    const nextData = {
+                                                                                        ...currentDraft,
+                                                                                        images: updatedImages,
+                                                                                    };
+
+                                                                                    setGenericDrafts(current => ({
+                                                                                        ...current,
+                                                                                        [section.id]: nextData,
+                                                                                    }));
+
+                                                                                    await saveGenericComponent(section, nextData);
+                                                                                }}
+                                                                            >
+                                                                                Remove image
+                                                                            </Button>
+                                                                        )}
+                                                                        </div>
+                                                                    );
+                                                                    })}
                                                                 </div>
                                                             )}
                                                             <Button
@@ -1302,6 +1820,52 @@ defineDashboardExtension({
                                                     default image.
                                                 </p>
                                             )}
+
+                                            <div className="space-y-4">
+                                                {(heroSection.data.images ?? []).map((image: any, index: number) => {
+                                                    const copy =
+                                                    heroContentDrafts[index] ??
+                                                    DEFAULT_HERO_CONTENT[index % DEFAULT_HERO_CONTENT.length]!;
+
+                                                    return (
+                                                    <div key={image.assetId || index} className="space-y-3 rounded-md border p-4">
+                                                        <h4 className="font-medium">Banner {index + 1} text</h4>
+
+                                                        <div>
+                                                        <Label>Badge</Label>
+                                                        <Input
+                                                            value={copy.badge}
+                                                            onChange={event => updateHeroContent(index, 'badge', event.target.value)}
+                                                        />
+                                                        </div>
+
+                                                        <div>
+                                                        <Label>Title</Label>
+                                                        <Input
+                                                            value={copy.title}
+                                                            onChange={event => updateHeroContent(index, 'title', event.target.value)}
+                                                        />
+                                                        </div>
+
+                                                        <div>
+                                                        <Label>Subtitle</Label>
+                                                        <Textarea
+                                                            value={copy.subtitle}
+                                                            onChange={event => updateHeroContent(index, 'subtitle', event.target.value)}
+                                                        />
+                                                        </div>
+
+                                                        <div>
+                                                        <Label>Link</Label>
+                                                        <Input
+                                                            value={copy.link}
+                                                            onChange={event => updateHeroContent(index, 'link', event.target.value)}
+                                                        />
+                                                        </div>
+                                                    </div>
+                                                    );
+                                                })}
+                                            </div>
 
                                             <Button
                                                 type="button"
@@ -1602,47 +2166,87 @@ defineDashboardExtension({
                                                     ? 'Select Contact Logo'
                                                     : assetPickerMode === 'component-image'
                                                         ? 'Select Component Image'
-                                                        : 'Select Hero Banner'
+                                                        : assetPickerMode === 'category-image'
+                                                            ? `Select ${categoryImageCode ?? 'Pet Category'} Image`
+                                                            : 'Select Hero Banner'
                                     }
+                                    
                                     onSelect={assets => {
-                                        if (!assets[0]) {
-                                            return;
-                                        }
+                                    if (!assets[0]) return;
 
-                                        if (assetPickerMode === 'hero') {
-                                            saveHero.mutate(assets);
-                                        } else if (assetPickerMode === 'contact-hero') {
-                                            saveContactSection.mutate({
-                                                heroImage: assets[0].source,
-                                                heroPreview: assets[0].preview,
-                                                heroAssetId: assets[0].id,
-                                            });
-                                        } else if (assetPickerMode === 'contact-logo') {
-                                            saveContactSection.mutate({
-                                                logoImage: assets[0].source,
-                                                logoPreview: assets[0].preview,
-                                                logoAssetId: assets[0].id,
-                                            });
-                                        } else if (assetPickerMode === 'component-image' && componentImageId) {
-                                            const section = page?.sections.find(item => item.id === componentImageId);
-                                            if (section) {
-                                                const data = {
-                                                    ...section.data,
-                                                    image: assets[0].source,
-                                                    preview: assets[0].preview,
-                                                    assetId: assets[0].id,
-                                                };
-                                                setGenericDrafts({
-                                                    ...genericDrafts,
-                                                    [section.id]: data,
-                                                });
-                                                saveGenericComponent(section, data);
-                                            }
-                                        } else {
-                                            saveHappyTails.mutate(assets);
-                                        }
+                                    if (assetPickerMode === 'hero') {
+                                        saveHero.mutate(assets);
+                                    } else if (assetPickerMode === 'contact-hero') {
+                                        saveContactSection.mutate({
+                                        heroImage: assets[0].source,
+                                        heroPreview: assets[0].preview,
+                                        heroAssetId: assets[0].id,
+                                        });
+                                    } else if (assetPickerMode === 'contact-logo') {
+                                        saveContactSection.mutate({
+                                        logoImage: assets[0].source,
+                                        logoPreview: assets[0].preview,
+                                        logoAssetId: assets[0].id,
+                                        });
+                                    } else if (
+                                        assetPickerMode === 'component-image' &&
+                                        componentImageId
+                                    ) {
+                                        const section = page?.sections.find(
+                                        item => item.id === componentImageId,
+                                        );
 
-                                        setAssetPickerOpen(false);
+                                        if (section) {
+                                        const data = {
+                                            ...section.data,
+                                            image: assets[0].source,
+                                            preview: assets[0].preview,
+                                            assetId: assets[0].id,
+                                        };
+
+                                        setGenericDrafts({
+                                            ...genericDrafts,
+                                            [section.id]: data,
+                                        });
+
+                                        saveGenericComponent(section, data);
+                                        }
+                                    } else if (
+                                        assetPickerMode === 'category-image' &&
+                                        componentImageId &&
+                                        categoryImageCode
+                                    ) {
+                                        const section = page?.sections.find(
+                                        item => item.id === componentImageId,
+                                        );
+
+                                        if (section) {
+                                        const draft =
+                                            genericDrafts[section.id] ?? section.data ?? {};
+
+                                        const images = {
+                                            ...(draft.images ?? {}),
+                                            [categoryImageCode]: {
+                                            source: assets[0].source,
+                                            preview: assets[0].preview,
+                                            assetId: assets[0].id,
+                                            },
+                                        };
+
+                                        const nextData = { ...draft, images };
+
+                                        setGenericDrafts({
+                                            ...genericDrafts,
+                                            [section.id]: nextData,
+                                        });
+
+                                        saveGenericComponent(section, nextData);
+                                        }
+                                    } else if (assetPickerMode === 'happy-tails') {
+                                        saveHappyTails.mutate(assets);
+                                    }
+
+                                    setAssetPickerOpen(false);
                                     }}
                                 />
                             </PageBlock>

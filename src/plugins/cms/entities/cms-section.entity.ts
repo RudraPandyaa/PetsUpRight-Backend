@@ -28,7 +28,8 @@ export class CmsSection
     @Column({ default: 0 })
     position: number;
 
-    @Column({ type: 'jsonb' })
+    // 'json' works on MySQL/MariaDB as well as Postgres ('jsonb' is Postgres only)
+    @Column({ type: 'json' })
     data: Record<string, any>;
 
     @ManyToOne(
