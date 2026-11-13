@@ -44,20 +44,17 @@ import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiproc
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
 const databaseSsl =
-  process.env.DATABASE_SSL === "true"
+  process.env.DATABASE_SSL === 'true'
     ? {
         rejectUnauthorized:
-          process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
+          process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
         ...(process.env.DATABASE_SSL_CA
-          ? { ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, '\n') }
+          ? {
+              ca: process.env.DATABASE_SSL_CA.replace(/\\n/g, '\n'),
+            }
           : {}),
       }
     : undefined;
-        console.log('[DB SSL]', {
-    enabled: !!databaseSsl,
-    rejectUnauthorized: databaseSsl?.rejectUnauthorized,
-    caConfigured: !!databaseSsl?.ca,
-    });
 // Public address of the storefront (Nuxt), used for links in emails
 const storefrontUrl = (process.env.STOREFRONT_URL || "http://localhost:3001").replace(/\/+$/, "");
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
