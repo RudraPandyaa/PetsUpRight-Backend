@@ -1,0 +1,43 @@
+{{> header title=documentTitle previewOrderCode=orderCode previewPrefix="Order " previewSuffix=" - your document is attached." }}
+
+<mj-section background-color="#f7f5fa" padding="0 16px 20px">
+  <mj-column background-color="#ffffff" border-radius="14px" padding="24px">
+    <mj-text align="center" color="#44476f" font-size="25px" font-weight="700" padding="0 0 8px">
+      {{#if isCreditNote}}Credit note issued{{else}}Your tax invoice{{/if}}
+    </mj-text>
+    <mj-text align="center">
+      Hi {{customerName}},<br />
+      {{#if isCreditNote}}
+        We have issued a credit note for order <strong>#{{orderCode}}</strong>{{#if reason}} ({{reason}}){{/if}}.
+        It cancels invoice <strong>{{referenceNumber}}</strong>.
+      {{else}}
+        Thank you for your order <strong>#{{orderCode}}</strong>. Your GST invoice is attached to this email as a PDF.
+      {{/if}}
+    </mj-text>
+    <mj-divider border-color="#eceaf2" padding="8px 0" />
+    <mj-table cellpadding="8px" font-size="13px" color="#44476f">
+      <tr>
+        <td align="center" style="background-color: #f7f5fa;">
+          <strong>{{#if isCreditNote}}CREDIT NOTE NO.{{else}}INVOICE NO.{{/if}}</strong><br />
+          {{invoiceNumber}}
+        </td>
+        <td align="center" style="background-color: #f7f5fa;">
+          <strong>DATE</strong><br />
+          {{invoiceDate}}
+        </td>
+        <td align="center" style="background-color: #f7f5fa;">
+          <strong>{{#if isCreditNote}}CREDIT{{else}}TOTAL{{/if}}</strong><br />
+          {{total}}
+        </td>
+      </tr>
+    </mj-table>
+    <mj-button background-color="#44476f" color="#ffffff" border-radius="8px" font-weight="700" href="{{downloadUrl}}" padding="18px 0 6px">
+      Download PDF
+    </mj-button>
+    <mj-text align="center" color="#77778a" font-size="13px" padding="12px 0 0">
+      Keep this document for your records. Thank you for shopping with PetsUpRight.
+    </mj-text>
+  </mj-column>
+</mj-section>
+
+{{> footer }}

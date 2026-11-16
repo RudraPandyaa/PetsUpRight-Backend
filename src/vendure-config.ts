@@ -41,6 +41,8 @@ import {
 import { orderCancellationEmailHandlers } from './plugins/delivery-pincode/order-cancellation-email.handlers';
 import { HealthPlugin } from './plugins/health/health.plugin'
 import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
+import { InvoicePlugin } from './plugins/invoice/invoice.plugin';
+import { invoiceEmailHandler } from './plugins/invoice/invoice-email.handler';
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
 const databaseSsl =
@@ -561,6 +563,7 @@ export const config: VendureConfig = {
     ...shiprocketEmailHandlers,
     ...shiprocketAdminEmailHandlers,
     ...orderCancellationEmailHandlers,
+    invoiceEmailHandler,
     ],
 
       templateLoader: new FileBasedTemplateLoader(
@@ -601,6 +604,7 @@ export const config: VendureConfig = {
     HealthPlugin,
     ProductReviewPlugin,
     DeliveryPincodePlugin,
+    InvoicePlugin,
     GoogleAuthPlugin.init({
         googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
     }),

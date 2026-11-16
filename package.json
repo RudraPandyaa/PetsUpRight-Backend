@@ -31,11 +31,13 @@
     "graphql-tag": "^2.12.7",
     "mysql2": "^3.24.5",
     "nodemailer": "^10.0.10",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
     "razorpay": "^2.9.8",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.17.7",
     "@vendure/cli": "3.7.2",
     "@vendure/create": "^3.7.2",
     "patch-package": "^8.0.1",
