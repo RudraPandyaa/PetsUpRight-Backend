@@ -5,6 +5,7 @@ import { Invoice } from '../entities/invoice.entity';
 import { InvoiceSettings } from '../entities/invoice-settings.entity';
 import { GST_STATE_NAMES } from '../gst-states';
 import { invoiceDownloadUrl } from '../invoice-link';
+import { buildSampleSnapshot } from '../sample-invoice';
 import { InvoicePdfService } from '../services/invoice-pdf.service';
 import {
     InvoiceSettingsService,
@@ -32,12 +33,32 @@ export class InvoiceAdminResolver {
         @Ctx() ctx: RequestContext,
         @Args('input') input: UpdateInvoiceSettingsInput,
     ) {
+        return this.settingsService.preview(ctx, await this.draft(ctx, input));
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder)
+    async sampleInvoicePdf(
+        @Ctx() ctx: RequestContext,
+        @Args('input') input: UpdateInvoiceSettingsInput | undefined,
+        @Args('interState') interState: boolean,
+    ) {
+        const draft = await this.draft(ctx, input ?? {});
+        const { nextInvoiceNumber } = await this.settingsService.preview(ctx, draft);
+        const pdf = await this.pdfService.render(
+            buildSampleSnapshot(draft, nextInvoiceNumber, { interState: Boolean(interState) }),
+        );
+        return pdf.toString('base64');
+    }
+
+    /** Current settings with the unsaved form values applied. */
+    private async draft(ctx: RequestContext, input: UpdateInvoiceSettingsInput) {
         const current = await this.settingsService.get(ctx);
         const draft = Object.assign(new InvoiceSettings(), current);
         for (const [key, value] of Object.entries(input)) {
             if (value !== undefined && value !== null) (draft as any)[key] = value;
         }
-        return this.settingsService.preview(ctx, draft);
+        return draft;
     }
 
     @Query()

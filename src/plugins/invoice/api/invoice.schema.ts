@@ -128,6 +128,8 @@ export const adminApiExtensions = gql`
         invoicesForOrder(orderId: ID!): [OrderInvoice!]!
         "The PDF, base64-encoded."
         invoicePdf(id: ID!): String!
+        "A sample invoice PDF (base64) using these (unsaved) settings and made-up items."
+        sampleInvoicePdf(input: UpdateInvoiceSettingsInput, interState: Boolean = false): String!
     }
 
     extend type Mutation {

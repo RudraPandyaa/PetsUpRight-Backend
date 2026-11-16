@@ -2,16 +2,30 @@ import { AssetStorageStrategy } from '@vendure/core';
 import { v2 as cloudinary } from 'cloudinary';
 import { Readable } from 'stream';
 
+/** cloudinary://API_KEY:API_SECRET@CLOUD_NAME -> its parts, or null if absent/invalid. */
+function parseCloudinaryUrl(value: string | undefined) {
+    const match = value?.trim().match(/^cloudinary:\/\/([^:@\s]+):([^@\s]+)@([^/?\s]+)/);
+    if (!match) return null;
+    return {
+        apiKey: decodeURIComponent(match[1]),
+        apiSecret: decodeURIComponent(match[2]),
+        cloudName: match[3],
+    };
+}
+
 export class CloudinaryAssetStorageStrategy implements AssetStorageStrategy {
 
     constructor() {
-        const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
-        const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
-        const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+        // Either CLOUDINARY_URL (cloudinary://API_KEY:API_SECRET@CLOUD_NAME)
+        // or the three separate variables. The separate variables win.
+        const fromUrl = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || fromUrl?.cloudName;
+        const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || fromUrl?.apiKey;
+        const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || fromUrl?.apiSecret;
 
         if (!cloudName || !apiKey || !apiSecret) {
             throw new Error(
-                'Cloudinary config missing: check CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET',
+                'Cloudinary config missing: set CLOUDINARY_URL, or CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET',
             );
         }
 

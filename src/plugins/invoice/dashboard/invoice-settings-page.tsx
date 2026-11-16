@@ -67,6 +67,91 @@ const previewQuery = graphql(`
     }
 `);
 
+const sampleQuery = graphql(`
+    query SampleInvoicePdf($input: UpdateInvoiceSettingsInput, $interState: Boolean) {
+        sampleInvoicePdf(input: $input, interState: $interState)
+    }
+`);
+
+/** Live PDF preview of an invoice with the current (unsaved) settings. */
+function SampleInvoice({ input }: { input: Record<string, unknown> }) {
+    const [interState, setInterState] = useState(false);
+    const [url, setUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const seq = useRef(0);
+    const urlRef = useRef<string | null>(null);
+    const key = JSON.stringify(input);
+
+    useEffect(() => {
+        const current = ++seq.current;
+        const timer = setTimeout(async () => {
+            setLoading(true);
+            try {
+                const result: any = await api.query(sampleQuery, { input: JSON.parse(key), interState });
+                if (current !== seq.current) return;
+                const bytes = Uint8Array.from(atob(result.sampleInvoicePdf), c => c.charCodeAt(0));
+                const next = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+                if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+                urlRef.current = next;
+                setUrl(next);
+                setError('');
+            } catch (err) {
+                if (current === seq.current) setError(errorMessage(err, 'Could not build the sample invoice'));
+            } finally {
+                if (current === seq.current) setLoading(false);
+            }
+        }, 900);
+        return () => clearTimeout(timer);
+    }, [key, interState]);
+
+    useEffect(
+        () => () => {
+            if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+        },
+        [],
+    );
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                        type="checkbox"
+                        checked={interState}
+                        onChange={event => setInterState(event.target.checked)}
+                        className="h-4 w-4"
+                    />
+                    Customer in another state (IGST)
+                </label>
+                <span className="text-xs text-muted-foreground">
+                    {loading ? 'Updating…' : 'Updates as you edit. Sample items; nothing is issued.'}
+                </span>
+                {url && (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener"
+                        className="ml-auto text-sm font-medium text-primary hover:underline"
+                    >
+                        Open full size
+                    </a>
+                )}
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="overflow-hidden rounded-md border bg-muted/30">
+                {url ? (
+                    <iframe title="Sample invoice" src={`${url}#view=FitH&toolbar=0`} className="h-[900px] w-full" />
+                ) : (
+                    <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+                        {error ? 'No preview' : 'Building sample invoice…'}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 const updateMutation = graphql(`
     mutation UpdateInvoiceSettings($input: UpdateInvoiceSettingsInput!) {
         updateInvoiceSettings(input: $input) {
@@ -238,6 +323,12 @@ export function InvoiceSettingsPage() {
     });
 
     const dirty = JSON.stringify(form) !== JSON.stringify(saved);
+    const sampleInput: Record<string, unknown> = {
+        ...form,
+        invoiceNextNumber: Number(form.invoiceNextNumber) || 1,
+        creditNoteNextNumber: Number(form.creditNoteNextNumber) || 1,
+        numberPadding: Number(form.numberPadding) || 1,
+    };
     const numberError = preview?.invoiceNumberError || preview?.creditNoteNumberError;
 
     async function save() {
@@ -479,6 +570,10 @@ export function InvoiceSettingsPage() {
                             </Field>
                         </div>
                     </div>
+                </PageBlock>
+
+                <PageBlock column="main" blockId="invoice-sample" title="Sample invoice">
+                    <SampleInvoice input={sampleInput} />
                 </PageBlock>
             </PageLayout>
         </Page>

@@ -28,6 +28,25 @@ import {
 } from '../types';
 import { InvoiceSettingsService } from './invoice-settings.service';
 
+/** The seller block printed on every invoice. */
+export function sellerFromSettings(settings: InvoiceSettings): InvoiceSnapshot['seller'] {
+    const sellerState = resolveGstState(settings.sellerState);
+    return {
+        legalName: settings.sellerLegalName || 'PetsUpRight',
+        name: settings.sellerTradeName || settings.sellerLegalName || 'PetsUpRight',
+        addressLines: (settings.sellerAddress ?? '')
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean),
+        state: sellerState.name,
+        stateCode: sellerState.code || (settings.sellerGstin ?? '').slice(0, 2),
+        gstin: settings.sellerGstin || undefined,
+        pan: settings.sellerPan || undefined,
+        email: settings.sellerEmail || undefined,
+        phone: settings.sellerPhone || undefined,
+    };
+}
+
 /** Orders in these states can be invoiced. */
 const INVOICEABLE_STATES = [
     'PaymentSettled',
@@ -358,21 +377,7 @@ export class InvoiceService {
         invoiceNumber: string,
         issuedAt: Date,
     ): InvoiceSnapshot {
-        const sellerState = resolveGstState(settings.sellerState);
-        const seller: InvoiceSnapshot['seller'] = {
-            legalName: settings.sellerLegalName || 'PetsUpRight',
-            name: settings.sellerTradeName || settings.sellerLegalName || 'PetsUpRight',
-            addressLines: settings.sellerAddress
-                .split(/\r?\n/)
-                .map(line => line.trim())
-                .filter(Boolean),
-            state: sellerState.name,
-            stateCode: sellerState.code || settings.sellerGstin.slice(0, 2),
-            gstin: settings.sellerGstin || undefined,
-            pan: settings.sellerPan || undefined,
-            email: settings.sellerEmail || undefined,
-            phone: settings.sellerPhone || undefined,
-        };
+        const seller = sellerFromSettings(settings);
 
         const email = order.customer?.emailAddress ?? undefined;
         const toParty = (address: any): InvoiceParty | null => {
