@@ -1,0 +1,124 @@
+{{> header title=heading preheader=preheader }}
+
+<mj-wrapper background-color="#ffffff" border-radius="16px" padding="26px 20px 26px">
+  <mj-section padding="0 0 16px">
+    <mj-column>
+      <mj-text align="center" font-size="11px" font-weight="700" letter-spacing="1px" color="#8465c8">
+        {{#if isPreview}}PREVIEW &middot; {{/if}}ADMIN NOTIFICATION
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <mj-section>
+    <mj-column>
+      <mj-text align="center" css-class="h1" font-size="24px" line-height="32px" font-weight="700" color="#2f3150">
+        {{heading}}
+      </mj-text>
+      <mj-text align="center" padding="10px 0 0" color="#5b5d78">
+        {{intro}}
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  {{#if warning}}
+    <mj-section padding="18px 0 0">
+      <mj-column background-color="#fdecea" border-radius="10px" padding="12px 14px">
+        <mj-text font-size="14px" line-height="21px" color="#9b2c1f">
+          <strong>Action needed:</strong> {{warning}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  {{/if}}
+
+  {{#if steps}}
+    <mj-section padding="20px 0 0">
+      <mj-column background-color="#f6f5fb" border-radius="12px" padding="16px">
+        <mj-text font-size="15px" font-weight="700" color="#2f3150" padding="0 0 6px">
+          What to do next
+        </mj-text>
+        <mj-table>
+          {{#each steps}}
+            <tr>
+              <td style="width: 30px; padding: 6px 0; vertical-align: top;">
+                <div style="width: 22px; height: 22px; border-radius: 11px; background-color: #44476f; color: #ffffff; font-size: 12px; font-weight: 700; line-height: 22px; text-align: center;">{{number}}</div>
+              </td>
+              <td style="padding: 7px 0 7px 6px; font-size: 14px; line-height: 20px; color: #2f3150; vertical-align: top;">{{text}}</td>
+            </tr>
+          {{/each}}
+        </mj-table>
+      </mj-column>
+    </mj-section>
+  {{/if}}
+
+  {{> shipment }}
+
+  <mj-section padding="22px 0 0">
+    <mj-column>
+      <mj-button href="{{cta.url}}" css-class="btn-full">{{cta.label}}</mj-button>
+      {{#if secondaryCta}}
+        <mj-button href="{{secondaryCta.url}}" background-color="#ffffff" color="#44476f" border="1px solid #44476f" padding="10px 0 0" css-class="btn-full">
+          {{secondaryCta.label}}
+        </mj-button>
+      {{/if}}
+    </mj-column>
+  </mj-section>
+
+  <mj-section padding="24px 0 0">
+    <mj-column>
+      <mj-divider padding="0 0 18px" />
+    </mj-column>
+  </mj-section>
+  <mj-section>
+    <mj-column width="50%">
+      <mj-text font-size="12px" font-weight="700" color="#7b7d94" letter-spacing="0.6px" padding="0 10px 6px 0">
+        CUSTOMER
+      </mj-text>
+      <mj-text font-size="14px" line-height="21px" padding="0 10px 0 0">
+        <strong style="color: #2f3150;">{{order.customer.name}}</strong><br />
+        {{#if order.customer.email}}<a href="mailto:{{order.customer.email}}">{{order.customer.email}}</a><br />{{/if}}
+        {{#if order.customer.phone}}<a href="tel:{{order.customer.phone}}">{{order.customer.phone}}</a>{{/if}}
+      </mj-text>
+    </mj-column>
+    <mj-column width="50%" css-class="stack-gap">
+      <mj-text font-size="12px" font-weight="700" color="#7b7d94" letter-spacing="0.6px" padding="0 0 6px">
+        SHIP TO
+      </mj-text>
+      <mj-text font-size="14px" line-height="21px">
+        <strong style="color: #2f3150;">{{order.address.name}}</strong><br />
+        {{#each order.address.lines}}{{this}}<br />{{/each}}
+        {{#if order.address.phone}}Phone: {{order.address.phone}}{{/if}}
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <mj-section padding="18px 0 0">
+    <mj-column>
+      <mj-table>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Placed on</td>
+          <td align="right" style="padding: 3px 0;">{{order.date}}</td>
+        </tr>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Delivery</td>
+          <td align="right" style="padding: 3px 0;">{{order.deliveryType}}</td>
+        </tr>
+        {{#if order.paymentMethod}}
+          <tr>
+            <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Payment</td>
+            <td align="right" style="padding: 3px 0;">{{order.paymentMethod}}</td>
+          </tr>
+        {{/if}}
+        {{#if order.paymentReference}}
+          <tr>
+            <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Payment ref.</td>
+            <td align="right" style="padding: 3px 0; word-break: break-all;">{{order.paymentReference}}</td>
+          </tr>
+        {{/if}}
+      </mj-table>
+    </mj-column>
+  </mj-section>
+
+  {{> order-items }}
+</mj-wrapper>
+
+{{> footer }}

@@ -1,0 +1,53 @@
+<mj-section padding="26px 0 0">
+  <mj-column>
+    <mj-text font-size="12px" font-weight="700" color="#7b7d94" letter-spacing="0.6px">
+      ORDER #{{order.code}} &middot; {{order.itemCount}} ITEM{{#unless order.singleItem}}S{{/unless}}
+    </mj-text>
+    <mj-table padding="6px 0 0">
+      {{#each order.items}}
+        <tr>
+          <td style="width: 64px; padding: 10px 12px 10px 0; vertical-align: top;">
+            {{#if imageUrl}}
+              <img src="{{imageUrl}}" width="56" height="56" alt="" style="display: block; width: 56px; height: 56px; border-radius: 8px; border: 1px solid #ecebf3;" />
+            {{else}}
+              <div style="width: 56px; height: 56px; border-radius: 8px; background-color: #f6f5fb;">&nbsp;</div>
+            {{/if}}
+          </td>
+          <td style="padding: 10px 10px 10px 0; vertical-align: top; font-size: 14px; line-height: 20px; color: #2f3150;">
+            {{name}}<br />
+            <span style="font-size: 13px; color: #7b7d94;">Qty: {{quantity}}</span>
+          </td>
+          <td align="right" style="padding: 10px 0; vertical-align: top; white-space: nowrap; font-size: 14px; font-weight: 600; color: #2f3150;">
+            {{price}}
+          </td>
+        </tr>
+      {{/each}}
+    </mj-table>
+    <mj-divider padding="8px 0 10px" />
+    <mj-table>
+      <tr>
+        <td style="padding: 3px 0; color: #7b7d94;">Items</td>
+        <td align="right" style="padding: 3px 0;">{{order.subtotal}}</td>
+      </tr>
+      <tr>
+        <td style="padding: 3px 0; color: #7b7d94;">Delivery</td>
+        <td align="right" style="padding: 3px 0;">{{order.shipping}}</td>
+      </tr>
+      {{#if order.discount}}
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94;">Discount</td>
+          <td align="right" style="padding: 3px 0; color: #2f9e6a;">-{{order.discount}}</td>
+        </tr>
+      {{/if}}
+      <tr>
+        <td style="padding: 8px 0 0; font-size: 16px; font-weight: 700; color: #2f3150;">{{#if isCancelled}}Order total{{else}}Total paid{{/if}}</td>
+        <td align="right" style="padding: 8px 0 0; font-size: 16px; font-weight: 700; color: #2f3150; white-space: nowrap;">{{order.total}}</td>
+      </tr>
+      {{#if order.gst}}
+        <tr>
+          <td colspan="2" align="right" style="padding: 2px 0 0; font-size: 12px; color: #a3a5b8;">Includes GST of {{order.gst}}</td>
+        </tr>
+      {{/if}}
+    </mj-table>
+  </mj-column>
+</mj-section>

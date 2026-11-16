@@ -41,6 +41,9 @@ export const invoiceEmailHandler = new EmailEventListener('invoice-issued')
         return {
             isCreditNote: isCredit,
             documentTitle: isCredit ? 'Credit note' : 'Tax invoice',
+            preheader: isCredit
+                ? `Credit note ${event.invoice.invoiceNumber} for order #${event.invoice.orderCode}.`
+                : `Your GST invoice ${event.invoice.invoiceNumber} for order #${event.invoice.orderCode} is attached.`,
             customerName: event.invoice.customerName,
             invoiceNumber: event.invoice.invoiceNumber,
             invoiceDate: new Date(event.invoice.issuedAt).toLocaleDateString('en-IN', {

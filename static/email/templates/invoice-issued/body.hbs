@@ -1,43 +1,53 @@
-{{> header title=documentTitle previewOrderCode=orderCode previewPrefix="Order " previewSuffix=" - your document is attached." }}
+{{> header title=documentTitle preheader=preheader }}
 
-<mj-section background-color="#f7f5fa" padding="0 16px 20px">
-  <mj-column background-color="#ffffff" border-radius="14px" padding="24px">
-    <mj-text align="center" color="#44476f" font-size="25px" font-weight="700" padding="0 0 8px">
-      {{#if isCreditNote}}Credit note issued{{else}}Your tax invoice{{/if}}
-    </mj-text>
-    <mj-text align="center">
-      Hi {{customerName}},<br />
-      {{#if isCreditNote}}
-        We have issued a credit note for order <strong>#{{orderCode}}</strong>{{#if reason}} ({{reason}}){{/if}}.
-        It cancels invoice <strong>{{referenceNumber}}</strong>.
-      {{else}}
-        Thank you for your order <strong>#{{orderCode}}</strong>. Your GST invoice is attached to this email as a PDF.
-      {{/if}}
-    </mj-text>
-    <mj-divider border-color="#eceaf2" padding="8px 0" />
-    <mj-table cellpadding="8px" font-size="13px" color="#44476f">
-      <tr>
-        <td align="center" style="background-color: #f7f5fa;">
-          <strong>{{#if isCreditNote}}CREDIT NOTE NO.{{else}}INVOICE NO.{{/if}}</strong><br />
-          {{invoiceNumber}}
-        </td>
-        <td align="center" style="background-color: #f7f5fa;">
-          <strong>DATE</strong><br />
-          {{invoiceDate}}
-        </td>
-        <td align="center" style="background-color: #f7f5fa;">
-          <strong>{{#if isCreditNote}}CREDIT{{else}}TOTAL{{/if}}</strong><br />
-          {{total}}
-        </td>
-      </tr>
-    </mj-table>
-    <mj-button background-color="#44476f" color="#ffffff" border-radius="8px" font-weight="700" href="{{downloadUrl}}" padding="18px 0 6px">
-      Download PDF
-    </mj-button>
-    <mj-text align="center" color="#77778a" font-size="13px" padding="12px 0 0">
-      Keep this document for your records. Thank you for shopping with PetsUpRight.
-    </mj-text>
-  </mj-column>
-</mj-section>
+<mj-wrapper background-color="#ffffff" border-radius="16px" padding="30px 20px 26px">
+  <mj-section>
+    <mj-column>
+      <mj-text align="center" css-class="h1" font-size="26px" line-height="34px" font-weight="700" color="#2f3150">
+        {{#if isCreditNote}}Credit note issued{{else}}Your tax invoice{{/if}}
+      </mj-text>
+      <mj-text align="center" padding="12px 0 0" color="#5b5d78">
+        Hi {{customerName}},
+        {{#if isCreditNote}}
+          we've issued a credit note for order #{{orderCode}}{{#if reason}} ({{reason}}){{/if}}. It cancels invoice {{referenceNumber}}.
+        {{else}}
+          thank you for your order #{{orderCode}}. Your GST invoice is attached to this email as a PDF.
+        {{/if}}
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <mj-section padding="22px 0 0">
+    <mj-column background-color="#f6f5fb" border-radius="12px" padding="14px 16px">
+      <mj-table>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">{{#if isCreditNote}}Credit note no.{{else}}Invoice no.{{/if}}</td>
+          <td align="right" style="padding: 3px 0; font-weight: 600; color: #2f3150;">{{invoiceNumber}}</td>
+        </tr>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Date</td>
+          <td align="right" style="padding: 3px 0;">{{invoiceDate}}</td>
+        </tr>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Order</td>
+          <td align="right" style="padding: 3px 0;">#{{orderCode}}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0 0; font-weight: 700; color: #2f3150;">{{#if isCreditNote}}Credit amount{{else}}Invoice total{{/if}}</td>
+          <td align="right" style="padding: 6px 0 0; font-weight: 700; color: #2f3150; white-space: nowrap;">{{total}}</td>
+        </tr>
+      </mj-table>
+    </mj-column>
+  </mj-section>
+
+  <mj-section padding="22px 0 0">
+    <mj-column>
+      <mj-button href="{{downloadUrl}}" css-class="btn-full">Download PDF</mj-button>
+      <mj-text align="center" padding="14px 0 0" font-size="13px" line-height="20px" color="#7b7d94">
+        Keep this document for your records.
+      </mj-text>
+    </mj-column>
+  </mj-section>
+</mj-wrapper>
 
 {{> footer }}

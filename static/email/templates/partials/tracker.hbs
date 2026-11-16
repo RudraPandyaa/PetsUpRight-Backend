@@ -1,0 +1,20 @@
+<mj-section padding="24px 0 0">
+  <mj-column>
+    <mj-table table-layout="fixed">
+      <tr>
+        {{#each steps}}
+          <td style="width: 25%; padding: 0 3px;">
+            <div style="height: 6px; border-radius: 3px; font-size: 0; line-height: 0; background-color: {{#if done}}#44476f{{else}}#e6e4ef{{/if}};">&nbsp;</div>
+          </td>
+        {{/each}}
+      </tr>
+      <tr>
+        {{#each steps}}
+          <td align="center" style="width: 25%; padding: 8px 2px 0; font-size: 12px; line-height: 16px; color: {{#if done}}#2f3150{{else}}#a3a5b8{{/if}};{{#if current}} font-weight: 700;{{/if}}">
+            {{label}}
+          </td>
+        {{/each}}
+      </tr>
+    </mj-table>
+  </mj-column>
+</mj-section>

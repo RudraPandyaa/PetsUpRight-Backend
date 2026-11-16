@@ -1,7 +1,20 @@
-    <mj-section background-color="#f7f5fa" padding="0 16px 18px">
+    <mj-section padding="22px 20px 36px">
       <mj-column>
-        <mj-text align="center" color="#888899" font-size="12px" padding="8px 0 0">
-          PetsUpRight · Made with care for your pets
+        {{#if support.email}}
+          <mj-text align="center" font-size="13px" line-height="20px" color="#7b7d94" css-class="muted">
+            Need help? Reply to this email or write to
+            <a href="mailto:{{support.email}}">{{support.email}}</a>{{#if support.phone}} &middot; Call {{support.phone}}{{/if}}
+          </mj-text>
+        {{else}}
+          {{#if defaultSupportEmail}}
+            <mj-text align="center" font-size="13px" line-height="20px" color="#7b7d94" css-class="muted">
+              Need help? Write to <a href="mailto:{{defaultSupportEmail}}">{{defaultSupportEmail}}</a>
+            </mj-text>
+          {{/if}}
+        {{/if}}
+        <mj-text align="center" font-size="12px" line-height="18px" color="#a3a5b8" padding="12px 0 0" css-class="muted">
+          PetsUpRight &middot; Made with care for your pets<br />
+          <a href="{{storefrontUrl}}">Visit our store</a>
         </mj-text>
       </mj-column>
     </mj-section>

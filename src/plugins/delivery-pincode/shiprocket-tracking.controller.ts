@@ -12,11 +12,14 @@ import {
 } from '@nestjs/common';
 import {
     Ctx,
+    EventBus,
     Fulfillment,
     FulfillmentService,
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
+
+import { ShipmentStatusChangedEvent } from '../order-emails/events';
 
 interface ShiprocketTrackingPayload {
     awb?: string | number;
@@ -30,6 +33,7 @@ export class ShiprocketTrackingController {
     constructor(
         private connection: TransactionalConnection,
         private fulfillmentService: FulfillmentService,
+        private eventBus: EventBus,
     ) {}
 
     @Post('tracking')
@@ -104,6 +108,7 @@ export class ShiprocketTrackingController {
                 shiprocketCourierName?: string | null;
             };
 
+        const previousStatus = String(customFields.shiprocketStatus ?? '');
         customFields.shiprocketStatus = status;
 
         if (payload.courier_name) {
@@ -111,6 +116,12 @@ export class ShiprocketTrackingController {
         }
 
         await repo.save(fulfillment);
+
+        if (previousStatus.toUpperCase() !== status.toUpperCase()) {
+            await this.eventBus.publish(
+                new ShipmentStatusChangedEvent(ctx, fulfillment.id, previousStatus, status),
+            );
+        }
 
         const normalizedStatus = status.toUpperCase();
 

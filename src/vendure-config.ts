@@ -31,17 +31,16 @@ import { shopApiCachePlugin } from './plugins/shop-api-cache/shop-api-cache';
 const IS_DEV = process.env.APP_ENV === "dev";
 const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
 import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
-import { shiprocketEmailHandlers } from './plugins/delivery-pincode/shiprocket-email.handlers';
 import {
     ahmedabadManualChecker,
     ahmedabadManualCalculator,
     shiprocketChecker,
     shiprocketCalculator,
 } from './shipping/shipping-operations';
-import { orderCancellationEmailHandlers } from './plugins/delivery-pincode/order-cancellation-email.handlers';
 import { HealthPlugin } from './plugins/health/health.plugin'
-import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
 import { InvoicePlugin } from './plugins/invoice/invoice.plugin';
+import { OrderEmailsPlugin } from './plugins/order-emails/order-emails.plugin';
+import { orderEmailHandlers } from './plugins/order-emails/order-email.handlers';
 import { invoiceEmailHandler } from './plugins/invoice/invoice-email.handler';
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
@@ -559,10 +558,11 @@ export const config: VendureConfig = {
       route: "mailbox",
 
       handlers: [
-    ...defaultEmailHandlers,
-    ...shiprocketEmailHandlers,
-    ...shiprocketAdminEmailHandlers,
-    ...orderCancellationEmailHandlers,
+    // Account emails (verification, password reset, email change). The default
+    // order confirmation is replaced by the order emails below.
+    ...defaultEmailHandlers.filter(handler => handler.type !== 'order-confirmation'),
+    // Customer + admin emails for every order step (Settings > Email notifications).
+    ...orderEmailHandlers,
     invoiceEmailHandler,
     ],
 
@@ -588,6 +588,8 @@ export const config: VendureConfig = {
             'https://res.cloudinary.com/oyrw2mrv/image/upload/v1794475978/logo-png_e4vmy1.png',
         storefrontUrl,
         fromAddress: process.env.SMTP_FROM,
+        // Contact shown in the footer of account and invoice emails.
+        defaultSupportEmail: process.env.SUPPORT_EMAIL ?? 'orders.petsupright@gmail.com',
         // Links in customer emails point to the storefront
         verifyEmailAddressUrl: `${storefrontUrl}/verify`,
         passwordResetUrl: `${storefrontUrl}/reset-password`,
@@ -605,6 +607,7 @@ export const config: VendureConfig = {
     ProductReviewPlugin,
     DeliveryPincodePlugin,
     InvoicePlugin,
+    OrderEmailsPlugin,
     GoogleAuthPlugin.init({
         googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
     }),

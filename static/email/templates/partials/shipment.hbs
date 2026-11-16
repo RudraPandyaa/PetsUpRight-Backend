@@ -1,0 +1,18 @@
+{{#if shipment.awb}}
+  <mj-section padding="20px 0 0">
+    <mj-column background-color="#f6f5fb" border-radius="12px" padding="14px 16px">
+      <mj-table>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Courier</td>
+          <td align="right" style="padding: 3px 0; font-weight: 600; color: #2f3150;">{{shipment.courier}}</td>
+        </tr>
+        <tr>
+          <td style="padding: 3px 0; color: #7b7d94; font-size: 13px;">Tracking no. (AWB)</td>
+          <td align="right" style="padding: 3px 0; font-weight: 600; color: #2f3150; word-break: break-all;">
+            {{#if shipment.trackingUrl}}<a href="{{shipment.trackingUrl}}" style="color: #44476f;">{{shipment.awb}}</a>{{else}}{{shipment.awb}}{{/if}}
+          </td>
+        </tr>
+      </mj-table>
+    </mj-column>
+  </mj-section>
+{{/if}}

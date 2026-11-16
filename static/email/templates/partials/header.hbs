@@ -1,26 +1,38 @@
 <mjml>
   <mj-head>
     <mj-title>{{title}}</mj-title>
-    {{#if previewOrderCode}}
-      <mj-preview>{{previewPrefix}}#{{previewOrderCode}}{{previewSuffix}}</mj-preview>
+    {{#if preheader}}
+      <mj-preview>{{preheader}}</mj-preview>
+    {{else}}
+      {{#if previewOrderCode}}
+        <mj-preview>{{previewPrefix}}#{{previewOrderCode}}{{previewSuffix}}</mj-preview>
+      {{/if}}
     {{/if}}
+    <mj-breakpoint width="480px" />
     <mj-attributes>
-      <mj-all font-family="Arial, Helvetica, sans-serif" />
-      <mj-text color="#55566f" font-size="14px" line-height="1.6" />
+      <mj-all font-family="'Segoe UI', Roboto, Helvetica, Arial, sans-serif" />
+      <mj-text color="#4a4c66" font-size="15px" line-height="24px" padding="0" />
       <mj-section padding="0" />
       <mj-column padding="0" />
+      <mj-button background-color="#44476f" color="#ffffff" font-size="15px" font-weight="700" border-radius="10px" inner-padding="14px 28px" padding="0" />
+      <mj-table color="#4a4c66" font-size="14px" line-height="20px" cellpadding="0" padding="0" />
+      <mj-divider border-color="#ecebf3" border-width="1px" padding="0" />
+      <mj-image padding="0" />
     </mj-attributes>
+    <mj-style>
+      a { color: #44476f; }
+      .muted a { color: #7b7d94; }
+      @media only screen and (max-width: 480px) {
+        .h1 div { font-size: 22px !important; line-height: 30px !important; }
+        .btn-full table { width: 100% !important; }
+        .stack-gap { padding-top: 16px !important; }
+      }
+    </mj-style>
   </mj-head>
 
-  <mj-body background-color="#f7f5fa" width="600px">
-    <mj-section background-color="#f7f5fa" padding="18px 16px 10px">
+  <mj-body background-color="#f4f2f8" width="600px">
+    <mj-section padding="24px 16px 18px">
       <mj-column>
-        <mj-image
-          src="{{emailLogoUrl}}"
-          alt="PetsUpRight"
-          width="150px"
-          align="center"
-          padding="0"
-        />
+        <mj-image src="{{emailLogoUrl}}" alt="PetsUpRight" width="140px" align="center" href="{{storefrontUrl}}" />
       </mj-column>
     </mj-section>
