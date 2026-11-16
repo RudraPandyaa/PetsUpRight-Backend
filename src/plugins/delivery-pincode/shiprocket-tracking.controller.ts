@@ -19,7 +19,7 @@ import {
 } from '@vendure/core';
 
 interface ShiprocketTrackingPayload {
-    awb?: string;
+    awb?: string | number;
     current_status?: string;
     shipment_status?: string;
     courier_name?: string;
@@ -51,17 +51,20 @@ export class ShiprocketTrackingController {
             throw new UnauthorizedException();
         }
 
-        const awb = payload?.awb?.trim();
-        const status = (
-            payload?.current_status ??
-            payload?.shipment_status ??
-            ''
+        // Shiprocket may send the AWB as a number, and its "test webhook"
+        // ping may omit fields; acknowledge those with 200 so the webhook
+        // can be saved and Shiprocket does not keep retrying.
+        const awb = String(payload?.awb ?? '').trim();
+        const status = String(
+            payload?.current_status ?? payload?.shipment_status ?? '',
         ).trim();
 
+        console.log(
+            `[Shiprocket webhook] AWB ${awb || '(none)'} status "${status || '(none)'}"`,
+        );
+
         if (!awb || !status) {
-            throw new BadRequestException(
-                'Webhook must include awb and status.',
-            );
+            return { received: true, matched: false };
         }
 
         const repo = this.connection.getRepository(ctx, Fulfillment);

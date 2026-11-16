@@ -291,7 +291,11 @@ export const shiprocketFulfillmentHandler = new FulfillmentHandler({
             stage = 'creating Shiprocket order';
             const shipment = await shiprocketService.createAdhocOrder(payload);
 
-            stage = 'assigning AWB';
+            console.log(
+                `[Shiprocket] Order ${order.code}: created Shiprocket order ${shipment.order_id}, shipment ${shipment.shipment_id}`,
+            );
+
+            stage = `assigning AWB (Shiprocket order ${shipment.order_id}, shipment ${shipment.shipment_id} already created - assign AWB in the Shiprocket panel or cancel it there before retrying)`;
             const awbResult = await shiprocketService.assignAwb(
                 shipment.shipment_id,
                 courier.courierId,
@@ -315,17 +319,36 @@ export const shiprocketFulfillmentHandler = new FulfillmentHandler({
                 );
             }
 
+            // The AWB is assigned (and paid for) at this point, so a pickup
+            // failure must not discard the fulfillment. Record it and let the
+            // admin schedule the pickup from the Shiprocket panel.
             stage = 'requesting pickup';
-            const pickupResult = await shiprocketService.requestPickup(
-                shipment.shipment_id,
-            );
-
-            const pickupStatus =
-                typeof pickupResult.status === 'string'
-                    ? pickupResult.status
-                    : mockEnabled
-                    ? 'MOCK_PICKUP_SCHEDULED'
-                    : 'PICKUP_REQUESTED';
+            let pickupStatus: string;
+            try {
+                const pickupResult = await shiprocketService.requestPickup(
+                    shipment.shipment_id,
+                );
+                pickupStatus =
+                    typeof pickupResult.status === 'string'
+                        ? pickupResult.status
+                        : mockEnabled
+                        ? 'MOCK_PICKUP_SCHEDULED'
+                        : 'PICKUP_REQUESTED';
+            } catch (pickupError) {
+                // Accounts with auto-pickup queue the pickup as soon as the
+                // AWB is assigned; Shiprocket then rejects our request.
+                const message =
+                    pickupError instanceof Error ? pickupError.message : String(pickupError);
+                if (/already in pickup queue/i.test(message)) {
+                    pickupStatus = 'PICKUP_QUEUED';
+                } else {
+                console.error(
+                    `[Shiprocket] AWB ${awbData.awb_code} assigned but pickup request failed for shipment ${shipment.shipment_id}. Schedule the pickup in the Shiprocket panel.`,
+                    pickupError instanceof Error ? pickupError.message : pickupError,
+                );
+                pickupStatus = 'PICKUP_REQUEST_FAILED';
+                }
+            }
 
             return {
                 method: mockEnabled ? 'Shiprocket (Mock)' : 'Shiprocket',

@@ -92,6 +92,11 @@ export class ShiprocketService {
     private token: string | null = null;
     private tokenExpiresAt = 0;
     private tokenRequest: Promise<string> | null = null;
+    // After a failed login, stop retrying for a while. Every storefront
+    // shipping check would otherwise retry the login, and Shiprocket blocks
+    // the account after too many failed attempts.
+    private loginFailedUntil = 0;
+    private lastLoginError = '';
     private isMockMode(): boolean {
         const enabled =
             process.env.SHIPROCKET_MOCK_MODE?.trim().toLowerCase() === 'true';
@@ -326,6 +331,12 @@ export class ShiprocketService {
             return this.tokenRequest;
         }
 
+        if (Date.now() < this.loginFailedUntil) {
+            throw new Error(
+                `${this.lastLoginError} (login paused until ${new Date(this.loginFailedUntil).toISOString()})`,
+            );
+        }
+
         this.tokenRequest = this.authenticate();
 
         try {
@@ -354,11 +365,19 @@ export class ShiprocketService {
         };
 
         if (!response.ok || !body.token) {
-            throw new Error(
-                `Shiprocket login failed (${response.status}): ${
-                    body.message ?? 'Token was not returned'
-                }`,
-            );
+            this.lastLoginError = `Shiprocket login failed (${response.status}): ${
+                body.message ?? 'Token was not returned'
+            }`;
+            // Credential/block errors: back off 15 min; other errors: 1 min.
+            const backoffMs =
+                response.status === 400 ||
+                response.status === 401 ||
+                response.status === 403
+                    ? 15 * 60 * 1000
+                    : 60 * 1000;
+            this.loginFailedUntil = Date.now() + backoffMs;
+            console.error(`[Shiprocket] ${this.lastLoginError}`);
+            throw new Error(this.lastLoginError);
         }
 
         this.token = body.token;
