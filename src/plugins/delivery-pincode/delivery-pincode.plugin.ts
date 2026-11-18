@@ -16,22 +16,26 @@ import {
 import { deliverablePincodeOrderProcess } from './deliverable-pincode-order-process';
 import { DeliverablePincode } from './entities/deliverable-pincode.entity';
 import { DeliverablePincodeService } from './services/deliverable-pincode.service';
+import { IndiaPostPincodeService } from './services/india-post-pincode.service';
 import { ShiprocketService } from './services/shiprocket.service';
 import { shiprocketFulfillmentHandler } from './shiprocket-fulfillment.handler';
 import { ShiprocketTrackingController } from './shiprocket-tracking.controller';
 
 
 /**
- * Deliverable pincodes: the admin manages the list in the dashboard
- * (Settings > Deliverable Pincodes), the storefront can check a pincode,
- * and orders outside the list cannot go to payment.
+ * Manual delivery pincodes are managed in the dashboard. Other
+ * Shiprocket-serviceable pincodes are delivered through Shiprocket.
  */
 @VendurePlugin({    
     imports: [PluginCommonModule],
 
     entities: [DeliverablePincode],
 
-    providers: [DeliverablePincodeService, ShiprocketService],
+    providers: [
+        DeliverablePincodeService,
+        IndiaPostPincodeService,
+        ShiprocketService,
+    ],
     controllers: [ShiprocketTrackingController],
     shopApiExtensions: {
         schema: shopApiExtensions,

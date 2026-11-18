@@ -5,8 +5,8 @@ import {
 import { Column, Entity, Index } from 'typeorm';
 
 /**
- * A pincode (Indian postal code) that orders can be delivered to. Orders
- * with a shipping address outside this list cannot be paid for.
+ * A pincode (Indian postal code) assigned to manual delivery. Other
+ * serviceable pincodes are handled by Shiprocket.
  */
 @Entity()
 export class DeliverablePincode extends VendureEntity {

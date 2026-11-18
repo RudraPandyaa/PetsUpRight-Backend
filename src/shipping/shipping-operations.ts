@@ -51,29 +51,36 @@ async function getWeightKg(
     return totalGrams > 0 ? totalGrams / 1000 : undefined;
 }
 
-async function isLocalAhmedabadOrder(
+async function isManualDeliveryOrder(
     ctx: RequestContext,
     order: Order,
 ): Promise<boolean> {
-    return pincodeService.isAhmedabadManualDelivery(
+    return pincodeService.isManualDeliveryPincode(
         ctx,
         order.shippingAddress?.postalCode,
     );
 }
 
-export const ahmedabadManualChecker = new ShippingEligibilityChecker({
+export const manualDeliveryChecker = new ShippingEligibilityChecker({
     code: 'ahmedabad-manual-checker',
     description: [
         {
             languageCode: LanguageCode.en,
-            value: 'Only Ahmedabad manual-delivery pincodes',
+            value: 'Pincodes configured for manual delivery',
         },
     ],
     args: {},
     init(injector: Injector) {
         pincodeService = injector.get(DeliverablePincodeService);
     },
-    check: async (ctx, order) => isLocalAhmedabadOrder(ctx, order),
+    check: async (ctx, order) => {
+        const pincode = order.shippingAddress?.postalCode;
+
+        return (
+            (await pincodeService.isValidIndianPincode(pincode)) &&
+            (await isManualDeliveryOrder(ctx, order))
+        );
+    },
 });
 
 export const shiprocketChecker = new ShippingEligibilityChecker({
@@ -92,9 +99,14 @@ export const shiprocketChecker = new ShippingEligibilityChecker({
     },
     check: async (ctx, order) => {
         try {
-            if (await isLocalAhmedabadOrder(ctx, order)) return false;
-
             const pincode = order.shippingAddress?.postalCode;
+
+            if (!(await pincodeService.isValidIndianPincode(pincode))) {
+                return false;
+            }
+
+            if (await isManualDeliveryOrder(ctx, order)) return false;
+
             const weightKg = await getWeightKg(ctx, order);
 
             if (!pincode || !weightKg) return false;
@@ -117,12 +129,12 @@ export const shiprocketChecker = new ShippingEligibilityChecker({
     },
 });
 
-export const ahmedabadManualCalculator = new ShippingCalculator({
+export const manualDeliveryCalculator = new ShippingCalculator({
     code: 'ahmedabad-manual-calculator',
     description: [
         {
             languageCode: LanguageCode.en,
-            value: 'Ahmedabad manual delivery fee',
+            value: 'Manual delivery fee',
         },
     ],
     args: {

@@ -1,5 +1,75 @@
 import { Input, Textarea } from '@vendure/dashboard';
 import { Controller, useFormContext, useWatch } from 'react-hook-form';
+import { useEffect, useRef, useState } from 'react';
+import {
+    parseIngredientText,
+    serializeIngredientList,
+} from '../services/ingredient-text';
+
+function IngredientListEditor({
+    value,
+    onChange,
+}: {
+    value: unknown;
+    onChange: (value: string) => void;
+}) {
+    const [ingredients, setIngredients] = useState(() =>
+        parseIngredientText(value),
+    );
+    const savedValue = useRef(typeof value === 'string' ? value : '');
+
+    useEffect(() => {
+        const nextValue = typeof value === 'string' ? value : '';
+
+        if (nextValue !== savedValue.current) {
+            setIngredients(parseIngredientText(value));
+            savedValue.current = nextValue;
+        }
+    }, [value]);
+
+    const commit = (updated: string[]) => {
+        setIngredients(updated);
+        const serialized = serializeIngredientList(updated);
+        savedValue.current = serialized;
+        onChange(serialized);
+    };
+
+    return (
+        <div className="space-y-2">
+            {ingredients.map((ingredient, index) => (
+                <div key={index} className="flex gap-2">
+                    <Input
+                        aria-label={`Ingredient ${index + 1}`}
+                        placeholder="e.g. Chicken"
+                        value={ingredient}
+                        onChange={event => {
+                            const updated = [...ingredients];
+                            updated[index] = event.target.value;
+                            commit(updated);
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="rounded-md border px-3"
+                        onClick={() =>
+                            commit(ingredients.filter((_, i) => i !== index))
+                        }
+                    >
+                        Remove
+                    </button>
+                </div>
+            ))}
+
+            <button
+                type="button"
+                className="rounded-md border px-3 py-2"
+                onClick={() => setIngredients([...ingredients, ''])}
+            >
+                + Add ingredient
+            </button>
+        </div>
+    );
+}
 
 const petTypes = [
     'Dog', 'Cat', 'Bird', 'Hemster', 'Guinea Pig',
@@ -74,49 +144,12 @@ export function ProductCustomFields() {
                         <Controller
                             control={control}
                             name="customFields.ingredients"
-                            render={({ field }) => {
-                                const ingredients: string[] = Array.isArray(field.value)
-                                    ? field.value
-                                    : [];
-
-                                return (
-                                    <div className="space-y-2">
-                                        {ingredients.map((ingredient, index) => (
-                                            <div key={index} className="flex gap-2">
-                                                <Input
-                                                    aria-label={`Ingredient ${index + 1}`}
-                                                    placeholder="e.g. Chicken"
-                                                    value={ingredient}
-                                                    onChange={event => {
-                                                        const updated = [...ingredients];
-                                                        updated[index] = event.target.value;
-                                                        field.onChange(updated);
-                                                    }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="rounded-md border px-3"
-                                                    onClick={() => {
-                                                        field.onChange(
-                                                            ingredients.filter((_, i) => i !== index)
-                                                        );
-                                                    }}
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        ))}
-
-                                        <button
-                                            type="button"
-                                            className="rounded-md border px-3 py-2"
-                                            onClick={() => field.onChange([...ingredients, ''])}
-                                        >
-                                            + Add ingredient
-                                        </button>
-                                    </div>
-                                );
-                            }}
+                            render={({ field }) => (
+                                <IngredientListEditor
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                />
+                            )}
                         />
                     </div>
 

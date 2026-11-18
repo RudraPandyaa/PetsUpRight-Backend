@@ -33,8 +33,8 @@ const IS_POSTGRES = /^postgres(ql)?:\/\//i.test(process.env.DATABASE_URL ?? "");
 import { GoogleAuthPlugin } from './plugins/google-auth/google-auth.plugin'
 import { shiprocketEmailHandlers } from './plugins/delivery-pincode/shiprocket-email.handlers';
 import {
-    ahmedabadManualChecker,
-    ahmedabadManualCalculator,
+    manualDeliveryChecker,
+    manualDeliveryCalculator,
     shiprocketChecker,
     shiprocketCalculator,
 } from './shipping/shipping-operations';
@@ -56,7 +56,7 @@ const databaseSsl =
       }
     : undefined;
 // Public address of the storefront (Nuxt), used for links in emails
-const storefrontUrl = (process.env.STOREFRONT_URL || "http://localhost:3001").replace(/\/+$/, "");
+const storefrontUrl = (process.env.STOREFRONT_URL || "http://localhost:3000").replace(/\/+$/, "");
 // PORT wins because hosting platforms inject it into the environment at runtime, and that
 // must take precedence over any value baked into the .env file at scaffold time.
 const serverPort =
@@ -167,12 +167,12 @@ export const config: VendureConfig = {
     shippingOptions: {
         shippingEligibilityCheckers: [
             defaultShippingEligibilityChecker,
-            ahmedabadManualChecker,
+            manualDeliveryChecker,
             shiprocketChecker,
         ],
         shippingCalculators: [
             defaultShippingCalculator,
-            ahmedabadManualCalculator,
+            manualDeliveryCalculator,
             shiprocketCalculator,
         ],
     },

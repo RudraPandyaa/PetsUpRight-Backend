@@ -35,13 +35,26 @@ export const deliverablePincodeOrderProcess: OrderProcess<OrderState> = {
             return 'Please add a shipping address with a pincode.';
         }
 
+        let isValidIndianPincode: boolean;
+
+        try {
+            isValidIndianPincode =
+                await pincodes.isValidIndianPincode(pincode);
+        } catch {
+            return 'We could not verify this pincode right now. Please try again.';
+        }
+
+        if (!isValidIndianPincode) {
+            return 'Please enter a valid Indian 6-digit pincode.';
+        }
+
         // Ensure variant custom fields, including shippingWeightGrams, are loaded.
         await entityHydrator.hydrate(ctx, order, {
             relations: ['lines', 'lines.productVariant'],
         });
 
-        // Ahmedabad orders are delivered manually by the client.
-        if (await pincodes.isAhmedabadManualDelivery(ctx, pincode)) {
+        // Pincodes configured in the admin are delivered manually.
+        if (await pincodes.isManualDeliveryPincode(ctx, pincode)) {
             return;
         }
 

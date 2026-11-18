@@ -119,7 +119,7 @@ export function DeliverablePincodesPage() {
     async function remove(pincode: DeliverablePincode) {
         if (
             !window.confirm(
-                `Remove ${pincode.code}? Customers there will no longer be able to order.`,
+                `Remove ${pincode.code} from manual delivery? Eligible orders there will use Shiprocket instead.`,
             )
         ) {
             return;
@@ -154,7 +154,7 @@ export function DeliverablePincodesPage() {
 
     return (
         <Page pageId="deliverable-pincodes">
-            <PageTitle>Deliverable pincodes</PageTitle>
+            <PageTitle>Manual delivery pincodes</PageTitle>
 
             <PageLayout>
                 <PageBlock
@@ -164,9 +164,10 @@ export function DeliverablePincodesPage() {
                 >
                     <div className="space-y-3">
                         <p className="text-sm text-muted-foreground">
-                            Customers can only place orders for delivery to
-                            these pincodes. Add one or more 6-digit pincodes,
-                            separated by commas, spaces or new lines.
+                            Orders to these pincodes use manual delivery.
+                            Other pincodes are checked with Shiprocket.
+                            Add one or more 6-digit pincodes, separated by
+                            commas, spaces or new lines.
                         </p>
 
                         <textarea
@@ -181,8 +182,8 @@ export function DeliverablePincodesPage() {
                         <Input
                             value={area}
                             onChange={event => setArea(event.target.value)}
-                            placeholder="Area (optional), e.g. Ahmedabad"
-                            aria-label="Area"
+                            placeholder="Area or note (optional), e.g. Ahmedabad"
+                            aria-label="Area or note"
                         />
 
                         <Button
@@ -198,7 +199,7 @@ export function DeliverablePincodesPage() {
                 <PageBlock
                     column="main"
                     blockId="deliverable-pincodes-list"
-                    title={`Deliverable pincodes (${pincodes.length})`}
+                    title={`Manual delivery pincodes (${pincodes.length})`}
                 >
                     <div className="space-y-3">
                         <Input
@@ -212,8 +213,8 @@ export function DeliverablePincodesPage() {
 
                         {!loading && pincodes.length === 0 && (
                             <p className="text-sm text-muted-foreground">
-                                No pincodes yet. Until you add some, customers
-                                cannot place orders.
+                                No manual delivery pincodes yet. Eligible
+                                addresses will use Shiprocket.
                             </p>
                         )}
 

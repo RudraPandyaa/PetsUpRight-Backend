@@ -7,6 +7,8 @@ import {
 import { In } from 'typeorm';
 
 import { DeliverablePincode } from '../entities/deliverable-pincode.entity';
+import { IndiaPostPincodeService } from './india-post-pincode.service';
+import { ShiprocketService } from './shiprocket.service';
 
 export type PincodeDeliverability = {
     pincode: string;
@@ -33,6 +35,8 @@ export function isValidPincode(code: string): boolean {
 export class DeliverablePincodeService {
     constructor(
         private readonly connection: TransactionalConnection,
+        private readonly shiprocket: ShiprocketService,
+        private readonly indiaPost: IndiaPostPincodeService,
     ) {}
 
     private repository(ctx: RequestContext) {
@@ -43,34 +47,33 @@ export class DeliverablePincodeService {
         return this.repository(ctx).find({ order: { code: 'ASC' } });
     }
 
-    async isDeliverable(
+    async isValidIndianPincode(
+        pincode: string | null | undefined,
+    ): Promise<boolean> {
+        const code = normalizePincode(pincode);
+
+        if (!isValidPincode(code)) {
+            return false;
+        }
+
+        return this.indiaPost.isValidIndianPincode(code);
+    }
+
+    async isManualDeliveryPincode(
         ctx: RequestContext,
         pincode: string | null | undefined,
     ): Promise<boolean> {
         const code = normalizePincode(pincode);
 
         if (!isValidPincode(code)) {
+            return false;
+        }
+
+        if (!(await this.indiaPost.isValidIndianPincode(code))) {
             return false;
         }
 
         return (await this.repository(ctx).count({ where: { code } })) > 0;
-    }
-
-    async isAhmedabadManualDelivery(
-        ctx: RequestContext,
-        pincode: string | null | undefined,
-    ): Promise<boolean> {
-        const code = normalizePincode(pincode);
-
-        if (!isValidPincode(code)) {
-            return false;
-        }
-
-        const entry = await this.repository(ctx).findOne({
-            where: { code },
-        });
-
-        return entry?.area?.trim().toLowerCase() === 'ahmedabad';
     }
 
     async checkDeliverability(
@@ -83,18 +86,49 @@ export class DeliverablePincodeService {
             return {
                 pincode: code,
                 deliverable: false,
-                message: 'Please enter a valid 6-digit pincode.',
+                message: 'Please enter a valid Indian 6-digit pincode.',
             };
         }
 
-        const deliverable = await this.isDeliverable(ctx, code);
+        if (!(await this.indiaPost.isValidIndianPincode(code))) {
+            return {
+                pincode: code,
+                deliverable: false,
+                message: 'Please enter a valid Indian 6-digit pincode.',
+            };
+        }
+
+        if (await this.isManualDeliveryPincode(ctx, code)) {
+            return {
+                pincode: code,
+                deliverable: true,
+                message: `Manual delivery is available to ${code}.`,
+            };
+        }
+
+        const defaultWeightGrams = Number(
+            process.env.SHIPROCKET_DEFAULT_WEIGHT_GRAMS ?? 500,
+        );
+
+        if (!Number.isFinite(defaultWeightGrams) || defaultWeightGrams <= 0) {
+            throw new Error(
+                'SHIPROCKET_DEFAULT_WEIGHT_GRAMS must be a positive number.',
+            );
+        }
+
+        const couriers = await this.shiprocket.getCourierOptions({
+            deliveryPincode: code,
+            weightKg: defaultWeightGrams / 1000,
+            cod: false,
+        });
+        const deliverable = couriers.length > 0;
 
         return {
             pincode: code,
             deliverable,
             message: deliverable
-                ? `Delivery is available to ${code}.`
-                : `Sorry, we do not deliver to ${code} yet.`,
+                ? `Shiprocket delivery is available to ${code}; final availability is checked at checkout.`
+                : `Shiprocket does not currently serve ${code}.`,
         };
     }
 

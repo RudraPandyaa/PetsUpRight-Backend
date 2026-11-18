@@ -133,7 +133,8 @@ export const TEMPLATE_COLUMNS: TemplateColumn[] = [
     {
         header: 'Ingredients',
         need: 'Optional',
-        help: 'Ingredients, for food and treats.',
+        help:
+            'Comma-separated ingredients, e.g. "trout (19%), ocean fish meal, sweet potatoes".',
         width: 40,
     },
     {

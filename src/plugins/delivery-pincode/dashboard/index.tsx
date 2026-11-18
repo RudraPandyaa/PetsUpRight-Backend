@@ -7,12 +7,12 @@ defineDashboardExtension({
             path: '/deliverable-pincodes',
 
             loader: () => ({
-                breadcrumb: 'Deliverable pincodes',
+                breadcrumb: 'Manual delivery pincodes',
             }),
 
             navMenuItem: {
                 id: 'deliverable-pincodes',
-                title: 'Deliverable Pincodes',
+                title: 'Manual Delivery Pincodes',
                 sectionId: 'settings',
             },
 

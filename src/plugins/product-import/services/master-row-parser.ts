@@ -16,7 +16,7 @@ import {
  * product name without its size. Columns:
  *
  * Vendor | Brand | UPC/EAN Code | SKU | Product Title | Product Description |
- * Product Features | Product Images | Gms | Variant | Casesize |
+ * Product Features | Product Images | Ingredients | Gms | Variant | Casesize |
  * Shelf Life (Days) | L1 | L2 | MRP | GST | HSN | Status | STATUS RECHECKED
  *
  * L2 is "<pet>-<category>", e.g. "Cats-Litter" or "Dogs- Dry Food".
@@ -151,6 +151,7 @@ export function parseMasterRow(
     const l2 = text('L2');
     const categories = categoryFromL2(l2, title);
     const description = text('Product Description');
+    const ingredients = text('Ingredients');
 
     // Rows marked anything but active are imported, but not sold
     const statuses = [text('Status'), text('STATUS RECHECKED')]
@@ -182,6 +183,7 @@ export function parseMasterRow(
         ['gstPercentage', 'GST'],
         ['description', 'Product Description'],
         ['keyPoints', 'Product Features'],
+        ['ingredients', 'Ingredients'],
         ['imageUrl', 'Product Images'],
         ['supplierName', 'Vendor'],
     ];
@@ -214,9 +216,9 @@ export function parseMasterRow(
         secondaryCategory: categories.secondaryCategory,
         tertiaryCategory: categories.tertiaryCategory,
 
-        isFood: /food|treat/i.test(l2),
+        isFood: /food|treat/i.test(l2) || Boolean(ingredients),
         keyPoints: text('Product Features'),
-        ingredients: '',
+        ingredients,
         analyticalConstituents: '',
         usageAndFeeding: '',
 
