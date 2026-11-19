@@ -13,6 +13,7 @@ import {
 } from '@vendure/core';
 import { CMS_PLUGIN_OPTIONS } from '../constants';
 import { CmsPage } from '../entities/cms-page.entity';
+import { CmsSection } from '../entities/cms-section.entity';
 import { PluginInitOptions } from '../types';
 
 // These can be replaced by generated types if you set up code generation
@@ -134,5 +135,77 @@ export class CmsPageService {
         isPublished: true,
     });
 }
+
+    async ensurePoliciesPage(ctx: RequestContext): Promise<CmsPage> {
+        const pageRepository = this.connection.getRepository(ctx, CmsPage);
+        let page = await pageRepository.findOne({
+            where: { slug: 'policies' },
+            relations: ['sections'],
+        });
+
+        if (!page) {
+            page = await pageRepository.save(new CmsPage({
+                title: 'Policies and Contact Details',
+                slug: 'policies',
+                isPublished: true,
+            }));
+            page.sections = [];
+        } else if (page.title !== 'Policies and Contact Details') {
+            page.title = 'Policies and Contact Details';
+            await pageRepository.save(page);
+        }
+
+        const defaults = [
+            {
+                type: 'cancellation-policy',
+                data: {
+                    text: 'We do not offer order cancellations. For any concerns, please contact us at petsupright@gmail.com.',
+                    publishedText: 'We do not offer order cancellations. For any concerns, please contact us at petsupright@gmail.com.',
+                },
+            },
+            {
+                type: 'return-policy',
+                data: {
+                    text: 'We do not offer standard returns. If you experience any issues with your order, please contact us at petsupright@gmail.com.',
+                    publishedText: 'We do not offer standard returns. If you experience any issues with your order, please contact us at petsupright@gmail.com.',
+                },
+            },
+            {
+                type: 'refund-policy',
+                data: {
+                    text: 'We do not offer standard refunds. For any refund-related concerns, please contact us at petsupright@gmail.com. Applicable consumer rights remain unaffected.',
+                    publishedText: 'We do not offer standard refunds. For any refund-related concerns, please contact us at petsupright@gmail.com. Applicable consumer rights remain unaffected.',
+                },
+            },
+            {
+                type: 'contact-details',
+                data: {
+                    address: '',
+                    mobileNumber: '',
+                    email: 'petsupright@gmail.com',
+                    publishedAddress: '',
+                    publishedMobileNumber: '',
+                    publishedEmail: 'petsupright@gmail.com',
+                },
+            },
+        ];
+        const existingTypes = new Set((page.sections ?? []).map(section => section.type));
+        const sectionRepository = this.connection.getRepository(ctx, CmsSection);
+
+        for (const [index, policy] of defaults.entries()) {
+            if (existingTypes.has(policy.type)) {
+                continue;
+            }
+
+            const section = new CmsSection();
+            section.type = policy.type;
+            section.position = index + 1;
+            section.data = policy.data;
+            section.page = page;
+            await sectionRepository.save(section);
+        }
+
+        return page;
+    }
 
 }

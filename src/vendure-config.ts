@@ -137,12 +137,10 @@ export const config: VendureConfig = {
         logging: false,
         ssl: databaseSsl,
         extra: {
-          max: Number(process.env.DATABASE_POOL_SIZE) || 10,
+          max: Number(process.env.DATABASE_POOL_SIZE) || 3,
           connectionTimeoutMillis: 10000,
-          // Idle connections are closed after 30s: Supabase's session pooler
-          // allows only 15 clients for the server, the worker and backups
-          // together. A longer value saves reconnecting (~0.4s) where the
-          // database has room for it.
+          // This pool size is per process; account for the server and worker
+          // and leave room for other clients under the provider's limit.
           idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS) || 30000,
           keepAlive: true,
         },
@@ -158,7 +156,7 @@ export const config: VendureConfig = {
         timezone: "Z",
         ssl: databaseSsl,
         extra: {
-          connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 10,
+          connectionLimit: Number(process.env.DATABASE_POOL_SIZE) || 3,
           connectTimeout: 10000,
         },
       },

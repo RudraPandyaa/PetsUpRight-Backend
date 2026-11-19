@@ -28,7 +28,8 @@ export class CmsInitService implements OnApplicationBootstrap {
         });
 
         await this.cmsPageService.ensureHomePage(ctx);
+        await this.cmsPageService.ensurePoliciesPage(ctx);
 
-        console.log('CMS Home page checked/created');
+        console.log('CMS pages checked/created');
     }
 }

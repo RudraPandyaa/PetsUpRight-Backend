@@ -50,6 +50,22 @@ const DEFAULT_HERO_CONTENT: HeroSlideContent[] = [
   { badge: 'Comfort Collection', title: 'Feels just like home', subtitle: 'Cosy picks for naps, cuddles and slow days', link: '/shop' },
 ];
 
+const POLICY_COMPONENT_LABELS: Record<string, string> = {
+    'cancellation-policy': 'Cancellation Policy',
+    'return-policy': 'Return Policy',
+    'refund-policy': 'Refund Policy',
+};
+const POLICY_COMPONENT_TYPES = Object.keys(POLICY_COMPONENT_LABELS);
+const CONTACT_DETAILS_COMPONENT_TYPE = 'contact-details';
+const POLICIES_PAGE_COMPONENT_LABELS: Record<string, string> = {
+    ...POLICY_COMPONENT_LABELS,
+    [CONTACT_DETAILS_COMPONENT_TYPE]: 'Contact Details',
+};
+const POLICIES_PAGE_COMPONENT_TYPES = [
+    ...POLICY_COMPONENT_TYPES,
+    CONTACT_DETAILS_COMPONENT_TYPE,
+];
+
 defineDashboardExtension({
     routes: [
         {
@@ -303,6 +319,7 @@ defineDashboardExtension({
                 const isContactPage = ['contact', 'contact-us', 'contactus'].includes(
                     page?.slug?.toLowerCase() ?? '',
                 );
+                const isPoliciesPage = page?.slug === 'policies';
 
                 const heroSection = page?.sections.find(
                     section => section.type === 'hero',
@@ -345,7 +362,7 @@ defineDashboardExtension({
                     const drafts: Record<string, any> = {};
                     page?.sections
                         .filter(section =>
-                            ['image', 'text', 'products', 'comfort-care', 'pet-category-images'].includes(section.type),
+                            ['image', 'text', 'products', 'comfort-care', 'pet-category-images', ...POLICIES_PAGE_COMPONENT_TYPES].includes(section.type),
                         )
                         .forEach(section => {
                             drafts[section.id] = section.data ?? {};
@@ -844,6 +861,72 @@ defineDashboardExtension({
                             throw new Error('CMS page not loaded');
                         }
 
+                        if (isPoliciesPage) {
+                            const policySections = page.sections.filter(section =>
+                                POLICY_COMPONENT_TYPES.includes(section.type),
+                            );
+
+                            if (policySections.length !== POLICY_COMPONENT_TYPES.length) {
+                                throw new Error('Policies page must contain all three policy components');
+                            }
+                            const contactSection = page.sections.find(
+                                section => section.type === CONTACT_DETAILS_COMPONENT_TYPE,
+                            );
+
+                            if (!contactSection) {
+                                throw new Error('Policies page is missing its Contact Details component');
+                            }
+
+                            const policyUpdates = policySections.map(section => {
+                                const draft = genericDrafts[section.id] ?? section.data ?? {};
+                                const text = (draft.text ?? '').trim();
+
+                                if (!text) {
+                                    throw new Error(`${POLICY_COMPONENT_LABELS[section.type]} cannot be empty`);
+                                }
+
+                                return { section, data: { ...draft, text, publishedText: text } };
+                            });
+
+                            for (const { section, data } of policyUpdates) {
+                                await api.mutate(updateCmsSectionMutation, {
+                                    input: {
+                                        id: section.id,
+                                        data,
+                                    },
+                                });
+                            }
+
+                            const contactDraft =
+                                genericDrafts[contactSection.id] ?? contactSection.data ?? {};
+                            const address = (contactDraft.address ?? '').trim();
+                            const mobileNumber = (contactDraft.mobileNumber ?? '').trim();
+                            const email = (contactDraft.email ?? '').trim();
+
+                            await api.mutate(updateCmsSectionMutation, {
+                                input: {
+                                    id: contactSection.id,
+                                    data: {
+                                        ...contactDraft,
+                                        address,
+                                        mobileNumber,
+                                        email,
+                                        publishedAddress: address,
+                                        publishedMobileNumber: mobileNumber,
+                                        publishedEmail: email,
+                                    },
+                                },
+                            });
+
+                            await api.mutate(updateCmsPageMutation, {
+                                input: {
+                                    id: page.id,
+                                    isPublished: true,
+                                },
+                            });
+                            return;
+                        }
+
                         updates.push(api.mutate(updateCmsPageMutation, {
                             input: {
                                 id: page.id,
@@ -949,6 +1032,27 @@ defineDashboardExtension({
                                     },
                                 }),
                             );
+                        }
+                        for (const section of page.sections.filter(item =>
+                            POLICY_COMPONENT_TYPES.includes(item.type),
+                        )) {
+                            const draft = genericDrafts[section.id] ?? section.data ?? {};
+                            const text = (draft.text ?? '').trim();
+
+                            if (!text) {
+                                throw new Error(`${POLICY_COMPONENT_LABELS[section.type]} cannot be empty`);
+                            }
+
+                            updates.push(api.mutate(updateCmsSectionMutation, {
+                                input: {
+                                    id: section.id,
+                                    data: {
+                                        ...draft,
+                                        text,
+                                        publishedText: text,
+                                    },
+                                },
+                            }));
                         }
                         for (const section of productSections) {
                             const draft =
@@ -1198,7 +1302,7 @@ defineDashboardExtension({
                                 <div className="flex flex-col gap-6">
                                     <div className="order-first flex items-center justify-between gap-4">
                                         <h2 className="text-lg font-medium">
-                                            Homepage Content
+                                            {isPoliciesPage ? 'Policies Content' : 'Homepage Content'}
                                         </h2>
 
                                         <Button
@@ -1211,7 +1315,7 @@ defineDashboardExtension({
                                     </div>
 
                                     <p className="text-sm text-muted-foreground">
-                                        Manage selected {isContactPage ? 'contact page' : 'homepage'} content.
+                                        Manage selected {isPoliciesPage ? 'policy' : isContactPage ? 'contact page' : 'homepage'} content.
                                     </p>
 
                                     <div className="order-0 border rounded-lg p-4 space-y-4">
@@ -1222,12 +1326,14 @@ defineDashboardExtension({
                                                     Add reusable content components and arrange them on this page.
                                                 </p>
                                             </div>
-                                            <Button
-                                                type="button"
-                                                onClick={() => setComponentFormOpen(value => !value)}
-                                            >
-                                                {componentFormOpen ? 'Cancel' : 'Add Component'}
-                                            </Button>
+                                            {!isPoliciesPage && (
+                                                <Button
+                                                    type="button"
+                                                    onClick={() => setComponentFormOpen(value => !value)}
+                                                >
+                                                    {componentFormOpen ? 'Cancel' : 'Add Component'}
+                                                </Button>
+                                            )}
                                         </div>
 
                                         {componentFormOpen && (
@@ -1284,8 +1390,8 @@ defineDashboardExtension({
                                                         onDragEnd={() => setDraggedComponentIndex(null)}
                                                         className="inline-flex cursor-grab items-center gap-2 rounded-full border px-3 py-1 text-xs active:cursor-grabbing"
                                                     >
-                                                        {index + 1}. {section.type}
-                                                        <button
+                                                        {index + 1}. {POLICIES_PAGE_COMPONENT_LABELS[section.type] ?? section.type}
+                                                        {!POLICIES_PAGE_COMPONENT_TYPES.includes(section.type) && <button
                                                             type="button"
                                                             aria-label={`Delete ${section.type} component`}
                                                             className="font-bold text-destructive"
@@ -1296,7 +1402,7 @@ defineDashboardExtension({
                                                             }}
                                                         >
                                                             x
-                                                        </button>
+                                                        </button>}
                                                     </span>
                                                 ))}
                                         </div>
@@ -1304,22 +1410,22 @@ defineDashboardExtension({
                                         <div className="space-y-4">
                                             {page.sections
                                                 .filter(section =>
-                                                    ['image', 'text', 'products', 'comfort-care', 'pet-category-images'].includes(section.type)
+                                                    ['image', 'text', 'products', 'comfort-care', 'pet-category-images', ...POLICIES_PAGE_COMPONENT_TYPES].includes(section.type)
                                                     )
                                                 .map(section => {
                                                     const draft = genericDrafts[section.id] ?? section.data ?? {};
 
                                                     return (
                                                         <div key={section.id} className="border rounded-md p-4 space-y-3">
-                                                            <h4 className="font-medium">{section.type} component</h4>
-                                                            {section.type === 'text' && (
+                                                            <h4 className="font-medium">{POLICIES_PAGE_COMPONENT_LABELS[section.type] ?? `${section.type} component`}</h4>
+                                                            {(section.type === 'text' || POLICY_COMPONENT_TYPES.includes(section.type)) && (
                                                                 <div className="space-y-2">
-                                                                    <Label>Content</Label>
+                                                                    <Label>{POLICY_COMPONENT_TYPES.includes(section.type) ? 'Policy text' : 'Content'}</Label>
 
                                                                     <Textarea
                                                                         value={draft.text ?? ''}
-                                                                        placeholder="Enter page content..."
-                                                                        rows={20}
+                                                                        placeholder={POLICY_COMPONENT_TYPES.includes(section.type) ? 'Enter policy text...' : 'Enter page content...'}
+                                                                        rows={POLICY_COMPONENT_TYPES.includes(section.type) ? 8 : 20}
                                                                         onChange={event =>
                                                                             setGenericDrafts({
                                                                                 ...genericDrafts,
@@ -1330,6 +1436,61 @@ defineDashboardExtension({
                                                                             })
                                                                         }
                                                                     />
+                                                                </div>
+                                                            )}
+                                                            {section.type === CONTACT_DETAILS_COMPONENT_TYPE && (
+                                                                <div className="space-y-4">
+                                                                    <div className="space-y-2">
+                                                                        <Label>Address</Label>
+                                                                        <Textarea
+                                                                            value={draft.address ?? ''}
+                                                                            placeholder="Enter business address"
+                                                                            rows={3}
+                                                                            onChange={event =>
+                                                                                setGenericDrafts({
+                                                                                    ...genericDrafts,
+                                                                                    [section.id]: {
+                                                                                        ...draft,
+                                                                                        address: event.target.value,
+                                                                                    },
+                                                                                })
+                                                                            }
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label>Mobile number</Label>
+                                                                        <Input
+                                                                            type="tel"
+                                                                            value={draft.mobileNumber ?? ''}
+                                                                            placeholder="Enter mobile number"
+                                                                            onChange={event =>
+                                                                                setGenericDrafts({
+                                                                                    ...genericDrafts,
+                                                                                    [section.id]: {
+                                                                                        ...draft,
+                                                                                        mobileNumber: event.target.value,
+                                                                                    },
+                                                                                })
+                                                                            }
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label>Email id</Label>
+                                                                        <Input
+                                                                            type="email"
+                                                                            value={draft.email ?? ''}
+                                                                            placeholder="Enter email address"
+                                                                            onChange={event =>
+                                                                                setGenericDrafts({
+                                                                                    ...genericDrafts,
+                                                                                    [section.id]: {
+                                                                                        ...draft,
+                                                                                        email: event.target.value,
+                                                                                    },
+                                                                                })
+                                                                            }
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {section.type === 'products' && (
