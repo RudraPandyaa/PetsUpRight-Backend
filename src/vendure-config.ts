@@ -42,6 +42,7 @@ import { orderCancellationEmailHandlers } from './plugins/delivery-pincode/order
 import { HealthPlugin } from './plugins/health/health.plugin'
 import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
 import { ShippingInfoPlugin } from './plugins/shipping-info/shipping-info.plugin';
+import { CustomerRegistrationPlugin } from './plugins/customer-registration/customer-registration.plugin';
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
 const databaseSsl =
@@ -535,6 +536,7 @@ export const config: VendureConfig = {
                 ],
   },
   plugins: [
+    CustomerRegistrationPlugin,
     ShippingInfoPlugin,
     GraphiqlPlugin.init(),
     AssetServerPlugin.init({
