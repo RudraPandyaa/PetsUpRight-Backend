@@ -160,6 +160,22 @@
       </tr>
     </mj-table>
 
+    {{#if showAccountTrackingNote}}
+    <mj-text
+      align="center"
+      font-size="14px"
+      line-height="22px"
+      color="#44476f"
+      container-background-color="#f2edf9"
+      padding="12px 16px"
+    >
+      <strong>Track your order</strong><br />
+      If you checked out as a guest, <a href="{{ storefrontUrl }}/register" style="color:#44476f; font-weight:700; text-decoration:underline;">create an account</a>
+      with the same email address you used at checkout to track your order.
+      If you already created an account, verify your email and sign in to track your order.
+    </mj-text>
+    {{/if}}
+
     <mj-text
       align="center"
       font-size="14px"

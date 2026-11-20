@@ -43,6 +43,7 @@ import { HealthPlugin } from './plugins/health/health.plugin'
 import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
 import { ShippingInfoPlugin } from './plugins/shipping-info/shipping-info.plugin';
 import { CustomerRegistrationPlugin } from './plugins/customer-registration/customer-registration.plugin';
+import { storefrontOrderConfirmationHandler } from './plugins/customer-registration/order-confirmation-email';
 import {
   googleVerificationEmailHandler,
   manualVerificationEmailHandler,
@@ -563,7 +564,8 @@ export const config: VendureConfig = {
       route: "mailbox",
 
       handlers: [
-    ...defaultEmailHandlers.filter(handler => handler.type !== 'email-verification'),
+    ...defaultEmailHandlers.filter(handler => handler.type !== 'email-verification' && handler.type !== 'order-confirmation'),
+    storefrontOrderConfirmationHandler,
     manualVerificationEmailHandler,
     googleVerificationEmailHandler,
     ...shiprocketEmailHandlers,
