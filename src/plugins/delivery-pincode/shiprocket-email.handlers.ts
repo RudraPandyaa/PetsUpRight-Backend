@@ -53,11 +53,15 @@ function createShiprocketEmailHandler(
                 shiprocketCourierName?: string | null;
                 shiprocketStatus?: string | null;
             };
+            const awb = fulfillment.trackingCode?.trim() || shiprocketFields.shiprocketAwbCode?.trim();
             return {
                 recipient: email,
                 order: { code: order.code },
                 fulfillment: {
-                    trackingCode: fulfillment.trackingCode,
+                    trackingCode: awb,
+                    trackingUrl: awb && fulfillment.method !== 'Shiprocket (Mock)'
+                        ? `https://shiprocket.co/tracking/${encodeURIComponent(awb)}`
+                        : undefined,
                     method: fulfillment.method,
                     state: fulfillment.state,
                     customFields: {

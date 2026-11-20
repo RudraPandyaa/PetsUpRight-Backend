@@ -43,6 +43,10 @@ import { HealthPlugin } from './plugins/health/health.plugin'
 import { shiprocketAdminEmailHandlers } from "./plugins/delivery-pincode/shiprocket-admin-email.handlers";
 import { ShippingInfoPlugin } from './plugins/shipping-info/shipping-info.plugin';
 import { CustomerRegistrationPlugin } from './plugins/customer-registration/customer-registration.plugin';
+import {
+  googleVerificationEmailHandler,
+  manualVerificationEmailHandler,
+} from './plugins/customer-registration/registration-email';
 // TLS for hosted databases. Supabase and similar use their own certificate
 // authority: set DATABASE_SSL_CA to it, or DATABASE_SSL_REJECT_UNAUTHORIZED=false.
 const databaseSsl =
@@ -121,7 +125,7 @@ export const config: VendureConfig = {
         admin: "admin-session",
       },
     },
-    requireVerification: false,
+    requireVerification: true,
     verificationTokenDuration: '1h',
   },
   // MySQL 8 or PostgreSQL, chosen by DATABASE_URL:
@@ -559,7 +563,9 @@ export const config: VendureConfig = {
       route: "mailbox",
 
       handlers: [
-    ...defaultEmailHandlers,
+    ...defaultEmailHandlers.filter(handler => handler.type !== 'email-verification'),
+    manualVerificationEmailHandler,
+    googleVerificationEmailHandler,
     ...shiprocketEmailHandlers,
     ...shiprocketAdminEmailHandlers,
     ...orderCancellationEmailHandlers,

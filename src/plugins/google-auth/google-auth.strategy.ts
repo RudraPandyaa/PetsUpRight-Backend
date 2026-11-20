@@ -1,14 +1,16 @@
 import {
   AuthenticationStrategy,
+  ExternalAuthenticationMethod,
   ExternalAuthenticationService,
   Injector,
   Logger,
   RequestContext,
   User,
+  UserService,
 } from '@vendure/core'
-import { OAuth2Client } from 'google-auth-library'
 import { DocumentNode } from 'graphql'
 import { gql } from 'graphql-tag'
+import { GOOGLE_AUTH_STRATEGY, GoogleIdentityVerifier } from './google-identity'
 
 type GoogleAuthData = {
   token: string
@@ -17,19 +19,21 @@ type GoogleAuthData = {
 export class GoogleAuthStrategy
   implements AuthenticationStrategy<GoogleAuthData>
 {
-  readonly name = 'google'
+  readonly name = GOOGLE_AUTH_STRATEGY
 
-  private readonly client: OAuth2Client
+  private readonly verifier: GoogleIdentityVerifier
   private externalAuthenticationService!: ExternalAuthenticationService
+  private userService!: UserService
   private readonly logger = new Logger()
 
-  constructor(private readonly googleClientId: string) {
-    this.client = new OAuth2Client(googleClientId)
+  constructor(googleClientId: string) {
+    this.verifier = new GoogleIdentityVerifier(googleClientId)
   }
 
   init(injector: Injector): void {
     this.externalAuthenticationService =
       injector.get(ExternalAuthenticationService)
+    this.userService = injector.get(UserService)
   }
 
   defineInputType(): DocumentNode {
@@ -43,46 +47,33 @@ export class GoogleAuthStrategy
   async authenticate(
     ctx: RequestContext,
     data: GoogleAuthData,
-  ): Promise<User | false> {
+  ): Promise<User | false | string> {
     try {
-      const ticket = await this.client.verifyIdToken({
-        idToken: data.token,
-        audience: this.googleClientId,
-      })
-
-      const payload = ticket.getPayload()
-
-      // Only accept Google accounts with verified email addresses.
-      if (
-        !payload?.sub ||
-        !payload.email ||
-        !payload.email_verified
-      ) {
-        return false
-      }
+      const payload = await this.verifier.verify(data.token)
+      if (!payload) return false
 
       const existingUser =
         await this.externalAuthenticationService.findCustomerUser(
           ctx,
           this.name,
           payload.sub,
+          false,
         )
 
-      if (existingUser) {
-        return existingUser
-      }
+      const user = existingUser ?? await this.userService.getUserByEmailAddress(ctx, payload.email)
+      if (!user) return 'No account is registered with this Google email. Create an account first.'
+      if (!user.verified) return 'Please verify your PetsUpRight email before signing in.'
 
-      return await this.externalAuthenticationService.createCustomerAndUser(
-        ctx,
-        {
-          strategy: this.name,
-          externalIdentifier: payload.sub,
-          verified: true,
-          emailAddress: payload.email,
-          firstName: payload.given_name || 'Google',
-          lastName: payload.family_name || 'User',
-        },
+      if (existingUser) return existingUser
+
+      const linkedToAnotherGoogleAccount = user.authenticationMethods.some(
+        method => method instanceof ExternalAuthenticationMethod && method.strategy === this.name,
       )
+      // Google owns Gmail and Workspace addresses. Other addresses need an explicit account link.
+      if (linkedToAnotherGoogleAccount || (!payload.email.endsWith('@gmail.com') && !payload.hd)) {
+        return 'Sign in with your PetsUpRight email and password for this account.'
+      }
+      return user
     } catch (error) {
       this.logger.error(
         `Google authentication failed: ${

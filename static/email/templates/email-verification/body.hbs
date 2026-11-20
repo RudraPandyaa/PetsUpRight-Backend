@@ -43,6 +43,15 @@
     >
       Verify My Email
     </mj-button>
+    {{#if generatedPassword}}
+      <mj-text align="center" color="#44476f" font-size="15px" padding="0 0 16px">
+        Your generated PetsUpright password is <strong>{{generatedPassword}}</strong>.
+        After verifying your email, you can sign in with this password or continue with Google.
+      </mj-text>
+      <mj-text align="center" color="#6647a4" font-size="14px" font-weight="700" padding="0 0 16px">
+        Please change your password after signing in.
+      </mj-text>
+    {{/if}}
     <mj-text
       align="center"
       font-size="13px"

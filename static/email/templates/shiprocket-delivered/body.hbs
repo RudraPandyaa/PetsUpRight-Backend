@@ -25,7 +25,13 @@
       TRACKING / AWB
     </mj-text>
     <mj-text background-color="#f7f5fa" padding="14px">
-      {{fulfillment.trackingCode}}
+      {{#if fulfillment.trackingUrl}}
+        <a href="{{fulfillment.trackingUrl}}" target="_blank" rel="noopener noreferrer" style="color:#44476f;">
+          {{fulfillment.trackingCode}}
+        </a>
+      {{else}}
+        {{fulfillment.trackingCode}}
+      {{/if}}
     </mj-text>
     <mj-text align="center" color="#77778a" font-size="13px" padding="12px 0 0">
       Thank you for shopping with PetsUpright.
